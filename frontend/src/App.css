@@ -805,6 +805,23 @@ pre {
   background: var(--surface-3);
 }
 
+/* Bet column: was the bet on the team our score favours */
+.favour-tag {
+  margin-left: 0.5rem;
+  padding: 0.1rem 0.4rem;
+  border-radius: 4px;
+  font-size: 0.8rem;
+  background: var(--surface-3);
+}
+
+.favour-tag-yes {
+  color: var(--pos-text);
+}
+
+.favour-tag-no {
+  color: var(--neg-text);
+}
+
 .matches-table .match-team-icon {
   width: 2rem;
   padding-left: 0;
