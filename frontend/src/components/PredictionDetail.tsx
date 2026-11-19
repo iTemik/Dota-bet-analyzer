@@ -10,9 +10,10 @@ import {
   outcome,
   resultOptions,
   seriesLabel,
+  snapshotTeam,
   teamLabel,
 } from '../predictions'
-import type { Prediction, PredictionDetail as Detail, Snapshot, TeamData } from '../types'
+import type { Prediction, PredictionDetail as Detail, Snapshot } from '../types'
 import ComparisonTable from './ComparisonTable'
 import BetOutcome from './BetOutcome'
 import HeadToHeadTable from './HeadToHeadTable'
@@ -25,9 +26,6 @@ interface PredictionDetailProps {
 }
 
 // The team as saved; old snapshots may lack fields the tables expect, so the lists default to empty
-const snapshotTeam = (snapshot: Snapshot): TeamData =>
-  ({ players: [], other_players: [], ...snapshot.data.team }) as TeamData
-
 const snapshotRanks = (snapshot: Snapshot): PlayerRanks =>
   new Map((snapshot.data.players ?? []).map((p) => [p.account_id, p.rank]))
 
