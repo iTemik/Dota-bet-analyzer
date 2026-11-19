@@ -42,12 +42,14 @@ export interface ScoreRule {
   name: string // shown in the score panel
   levels: Record<string, WeightLevel> // default weight level per tier, e.g. { base: 'low', big: 'mediocre' }
   limits?: Record<string, number> // default thresholds and big gaps, e.g. { bigGap: 80 }
+  labels?: Record<string, string> // weights editor names of tiers and limits that the common names don't cover
   apply: (input: ScoreInput, ctx: RuleContext) => Applied | null // null when a value is missing for either team
 }
 
 /** User changes on top of the defaults (weights editor); everything optional. */
 export interface ScoreSettings {
   points?: Partial<Record<WeightLevel, number>>
+  scale?: number // confidence knob, SCORE_SCALE by default
   rules?: Record<string, { levels?: Record<string, WeightLevel>; limits?: Record<string, number> }>
 }
 

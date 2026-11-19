@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest'
+import { beforeEach, describe, expect, it } from 'vitest'
 import {
   computeScore,
   expectedValue,
@@ -11,7 +11,7 @@ import {
   type ScoreRule,
   type ScoreTeam,
 } from './score'
-import { SCORE_RULES, headToHeadWins } from './scoreRules'
+import { SCORE_RULES, SCORE_SETTINGS_KEY, cleanScoreSettings, headToHeadWins, loadScoreSettings, saveScoreSettings } from './scoreRules'
 import type { MatchesSummary, TeamData } from './types'
 
 const NOW = 1_800_000_000
@@ -302,5 +302,36 @@ describe('bookmaker comparison', () => {
   it('does not flag value under 60% coverage', () => {
     expect(isValueBet(0.2, 0.5)).toBe(false)
     expect(isValueBet(0.05, 1)).toBe(false) // must be above +5%
+  })
+})
+
+describe('score settings storage', () => {
+  beforeEach(() => localStorage.clear())
+
+  it('keeps only settings the current rules have', () => {
+    const raw = {
+      points: { low: 3, none: 1, giant: 9, high: 'x' },
+      scale: 0,
+      rules: {
+        rating: { levels: { big: 'high', small: 'low' }, limits: { gap: 250, other: 1 } },
+        roster: { levels: { base: 'enormous' } },
+        removed_row: { levels: { base: 'low' } },
+      },
+    }
+    expect(cleanScoreSettings(raw)).toEqual({ points: { low: 3 }, rules: { rating: { levels: { big: 'high' }, limits: { gap: 250 } } } })
+    expect(cleanScoreSettings(null)).toEqual({})
+  })
+
+  it('saves, loads and removes the settings', () => {
+    saveScoreSettings({ scale: 200, rules: { roster: { levels: { base: 'low' } } } })
+    expect(JSON.parse(localStorage.getItem(SCORE_SETTINGS_KEY) ?? '{}')).toEqual({ scale: 200, rules: { roster: { levels: { base: 'low' } } } })
+    expect(loadScoreSettings()).toEqual({ scale: 200, rules: { roster: { levels: { base: 'low' } } } })
+    saveScoreSettings({})
+    expect(localStorage.getItem(SCORE_SETTINGS_KEY)).toBeNull()
+  })
+
+  it('loads nothing from broken storage', () => {
+    localStorage.setItem(SCORE_SETTINGS_KEY, '{not json')
+    expect(loadScoreSettings()).toEqual({})
   })
 })

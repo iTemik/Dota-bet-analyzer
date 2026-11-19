@@ -589,6 +589,9 @@ The backend provides REST API endpoints for team statistics, match data, and pla
   strong favourite at 55/62/72%), and each rule's points as a bar in the favoured team's column
 - Each rule lives in its table row (`score`), so a new scored row joins the score by itself; recalculated every time,
   no DB change
+- "Score weights" editor in the panel: every row of the scored tables in table order (unscored rows shown as "Not
+  scored"), weight word per tier and limits per rule, points per word and the confidence knob; changes apply at once,
+  are kept in the browser, and reset per rule or all
 
 #### Team Meta (Team Insights "Meta" and "Meta Heroes")
 - Does the team play the Meta tab's pro/ultra heroes, from its 15 newest tournament games (recent window first, then

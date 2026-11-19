@@ -32,4 +32,17 @@ describe('Collapsible', () => {
     )
     expect(content()).toHaveClass('expanded')
   })
+
+  it('renders lazy content only while open', async () => {
+    render(
+      <Collapsible title="Weights" lazy>
+        <pre>body</pre>
+      </Collapsible>,
+    )
+    expect(screen.queryByText('body')).not.toBeInTheDocument()
+    await userEvent.click(screen.getByRole('heading', { name: 'Weights' }))
+    expect(screen.getByText('body')).toBeInTheDocument()
+    await userEvent.click(screen.getByRole('heading', { name: 'Weights' }))
+    expect(screen.queryByText('body')).not.toBeInTheDocument()
+  })
 })

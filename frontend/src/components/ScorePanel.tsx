@@ -10,9 +10,11 @@ import {
   seriesWinProbability,
   type ScoreInput,
 } from '../score'
-import { SCORE_RULES } from '../scoreRules'
+import { SCORE_RULES, loadScoreSettings, saveScoreSettings } from '../scoreRules'
 import type { MatchesSummary, TeamData, TeamMeta } from '../types'
 import Bar from './Bar'
+import Collapsible from './Collapsible'
+import ScoreWeightsEditor from './ScoreWeightsEditor'
 
 interface ScorePanelProps {
   teams: (Partial<TeamData> | undefined)[] // team 1 and team 2
@@ -23,19 +25,24 @@ interface ScorePanelProps {
   headToHead?: ScoreInput['headToHead']
 }
 
-const BAR_MAX = Math.max(...Object.values(WEIGHT)) // one metric's top weight fills the bar
 const percent = (p: number): string => `${Math.round(p * 100)}%`
 
 /** Team score of team 1 vs team 2: weighted rules of the table rows, win chances and each rule's points. */
 function ScorePanel({ teams, summaries, metas, bestOf = 3, now, headToHead }: ScorePanelProps) {
   const [shownAt] = useState(() => Date.now() / 1000) // live statistics are judged at the time they were shown
+  const [settings, setSettings] = useState(loadScoreSettings)
+  const changeSettings = (next: typeof settings) => {
+    setSettings(next)
+    saveScoreSettings(next)
+  }
+  const barMax = Math.max(...Object.values({ ...WEIGHT, ...settings.points })) // one rule's top weight fills the bar
   const input: ScoreInput = {
     teams: [0, 1].map((i) => ({ team: teams[i], summary: summaries[i], meta: metas?.[i] })) as ScoreInput['teams'],
     now: now ?? shownAt,
     headToHead,
   }
-  const { score, coverage, metrics } = computeScore(input, SCORE_RULES)
-  const map = mapWinProbability(score)
+  const { score, coverage, metrics } = computeScore(input, SCORE_RULES, settings)
+  const map = mapWinProbability(score, settings.scale)
   const series = seriesWinProbability(map, bestOf)
   const names = [0, 1].map((i) => teamName(teams[i] as TeamData | undefined, i))
   const label = FAVOUR_LABELS[favour(series ?? map)]
@@ -77,7 +84,7 @@ function ScorePanel({ teams, summaries, metas, bestOf = 3, now, headToHead }: Sc
                 <td key={side}>
                   {Math.sign(m.points) === side && (
                     <span className="score-points">
-                      <Bar value={Math.abs(m.points)} max={BAR_MAX} tone="good" label={`${m.name} points`} />
+                      <Bar value={Math.abs(m.points)} max={barMax} tone="good" label={`${m.name} points`} />
                       {formatSigned(Math.abs(m.points))}
                     </span>
                   )}
@@ -92,6 +99,9 @@ function ScorePanel({ teams, summaries, metas, bestOf = 3, now, headToHead }: Sc
         {coverage < LOW_COVERAGE ? ': low confidence' : ''}.
         {even.length > 0 && ` Even or below their thresholds: ${even.map((m) => m.name).join(', ')}.`}
       </p>
+      <Collapsible lazy title={`Score weights${settings.points || settings.scale || settings.rules ? ' (changed)' : ''}`}>
+        <ScoreWeightsEditor settings={settings} onChange={changeSettings} />
+      </Collapsible>
     </div>
   )
 }
