@@ -761,7 +761,7 @@ describe('App Component', () => {
 
             // Wait for summary data to be polled and rating matches to appear
             await waitFor(() => {
-                expect(screen.getByText(/Rating Matches/i)).toBeInTheDocument()
+                expect(screen.getByText('Rating Matches')).toBeInTheDocument()
                 expect(screen.getByText('28')).toBeInTheDocument()
                 expect(screen.getByText('15')).toBeInTheDocument()
             }, { timeout: 5000 })
@@ -1080,7 +1080,7 @@ describe('App Component', () => {
 
             // Wait for summary data to be polled and the rows to be rendered
             await waitFor(() => {
-                expect(screen.getByText(/Average Player Rank/i)).toBeInTheDocument()
+                expect(screen.getByText('Average Player Rank')).toBeInTheDocument()
             }, { timeout: 5000 })
         }, 10000)
 
@@ -1201,7 +1201,7 @@ describe('App Component', () => {
 
             // Wait for summary data to be polled and the rows to be rendered
             await waitFor(() => {
-                expect(screen.getByText(/Low Rank Players/i)).toBeInTheDocument()
+                expect(screen.getByText('Low Rank Players')).toBeInTheDocument()
             }, { timeout: 5000 })
         }, 10000)
     })

@@ -1,17 +1,15 @@
-// Team score: Team Comparison metrics → one weighted score → win probability → comparison with bookmaker odds.
-// Method and Artem's weights: project research doc team-score-method.md (rev 3). Pure functions, no UI.
-// Weights are Artem's words: none 0, low 2, mediocre 5, high 8, huge 8 (Artem: huge = high).
-// Left out on purpose (weight none): Other Matches, Meta state, Radiant Win % (sides unknown before the draft),
-// player lists, tag and ID.
-import { ROSTER_STATES } from './roster'
-import type { FarmStats, MatchesSummary, TeamData, TeamMeta } from './types'
+// Team score maths: rule edges x weights → one score → win probability → comparison with bookmaker odds.
+// The rules themselves live in the table rows they score (`score` on Team Comparison / Team Insights rows), so a new
+// row brings its rule along; scoreRules.ts collects them. Method: project research doc team-score-method.md.
+import type { MatchesSummary, TeamData, TeamMeta } from './types'
 
+// Artem's weight words in points (huge = high, Artem 2026-11-19)
 export const WEIGHT = { none: 0, low: 2, mediocre: 5, high: 8, huge: 8 } as const
+export type WeightLevel = keyof typeof WEIGHT
 
 export const SCORE_SCALE = 150 // confidence knob: map % = 1 / (1 + 10^(-score / SCORE_SCALE)); bigger = more cautious
 export const VALUE_BET_MIN_EV = 0.05 // expected value above +5% is a value bet
 export const LOW_COVERAGE = 0.6 // under 60% of the weight with data, the result is low confidence
-const DAY = 24 * 3600
 
 /** One team's data as the Compare page and saved snapshots hold it; every part may be missing. */
 export interface ScoreTeam {
@@ -26,10 +24,37 @@ export interface ScoreInput {
   headToHead?: { team1Wins: number; team2Wins: number } | null
 }
 
-/** What one metric added: edge -1..+1 (+ favours team 1), the weight that applied, points = edge x weight. */
+/** What a rule gives: edge -1..+1 from team 1's side (+ favours team 1) and the weight in points that applied. */
+export interface Applied {
+  edge: number
+  weight: number
+}
+
+/** A rule's view of its settings: points of one of its weight tiers, value of one of its limits. */
+export interface RuleContext {
+  weight: (tier: string) => number
+  limit: (name: string) => number
+}
+
+/** Scoring part of a table row. Tiers and limits are named so an editor can list and change them. */
+export interface ScoreRule {
+  key: string
+  name: string // shown in the score panel
+  levels: Record<string, WeightLevel> // default weight level per tier, e.g. { base: 'low', big: 'mediocre' }
+  limits?: Record<string, number> // default thresholds and big gaps, e.g. { bigGap: 80 }
+  apply: (input: ScoreInput, ctx: RuleContext) => Applied | null // null when a value is missing for either team
+}
+
+/** User changes on top of the defaults (weights editor); everything optional. */
+export interface ScoreSettings {
+  points?: Partial<Record<WeightLevel, number>>
+  rules?: Record<string, { levels?: Record<string, WeightLevel>; limits?: Record<string, number> }>
+}
+
+/** What one rule added: points = edge x weight. */
 export interface MetricScore {
   key: string
-  label: string
+  name: string
   edge: number
   weight: number
   points: number
@@ -37,249 +62,71 @@ export interface MetricScore {
 
 export interface TeamScore {
   score: number // sum of points, + favours team 1
-  coverage: number // 0..1, share of the metrics' maximum weight that had data for both teams
-  metrics: MetricScore[] // metrics with data for both teams, in list order
+  coverage: number // 0..1, share of the rules' top weight that had data for both teams
+  metrics: MetricScore[] // rules with data for both teams, in list order
 }
 
-type Applied = { edge: number; weight: number }
-
-interface ScoreMetric {
-  key: string
-  label: string
-  maxWeight: number // for coverage
-  // null when a value is missing for either team; edge is from team 1's side
-  apply: (input: ScoreInput) => Applied | null
-}
-
-const clamp = (x: number): number => Math.max(-1, Math.min(1, x))
-const scaled = (gap: number, bigGap: number): number => clamp(gap / bigGap)
-const full = (gap: number): number => Math.sign(gap)
+export const clamp = (x: number): number => Math.max(-1, Math.min(1, x))
+/** gap / bigGap, cut to -1..+1 */
+export const scaled = (gap: number, bigGap: number): number => clamp(gap / bigGap)
+/** +1 / -1 toward the better team, 0 when even */
+export const full = (gap: number): number => Math.sign(gap)
 const present = (x: number | null | undefined): x is number => typeof x === 'number' && Number.isFinite(x)
+/** 0 means no data */
+export const positive = (x: number | null | undefined): number | null => (present(x) && x > 0 ? x : null)
 
-// Difference as a share of the smaller value (like the comparison colours), scaled by bigShare
-const shareGap = (a: number, b: number, bigShare: number): number => {
+/** Difference as a share of the smaller value (like the comparison colours), scaled by bigShare. */
+export const shareGap = (a: number, b: number, bigShare: number): number => {
   const smaller = Math.min(a, b)
   if (smaller <= 0) return a === b ? 0 : full(a - b)
-  return scaled((a - b) / smaller / bigShare, 1)
+  return clamp((a - b) / smaller / bigShare)
 }
 
-// A metric that reads one number per team and turns the two into an edge and weight
-const pair =
-  (pick: (t: ScoreTeam, input: ScoreInput) => number | null | undefined, rule: (a: number, b: number) => Applied) =>
-  (input: ScoreInput): Applied | null => {
-    const a = pick(input.teams[0], input)
-    const b = pick(input.teams[1], input)
-    return present(a) && present(b) ? rule(a, b) : null
+/**
+ * A rule that reads one number per team and turns the pair into an edge and weight.
+ * @param pick the team's number (null or undefined = no data)
+ * @param rule team 1's and team 2's numbers → edge and weight
+ * @returns a ScoreRule `apply`
+ */
+export const pairRule =
+  (
+    pick: (t: ScoreTeam) => number | null | undefined,
+    rule: (a: number, b: number, ctx: RuleContext) => Applied,
+  ): ScoreRule['apply'] =>
+  (input, ctx) => {
+    const a = pick(input.teams[0])
+    const b = pick(input.teams[1])
+    return present(a) && present(b) ? rule(a, b, ctx) : null
   }
 
-const fixed = (weight: number, edge: (a: number, b: number) => number) => (a: number, b: number) => ({ edge: edge(a, b), weight })
-
-const leagueWinPct = (t: ScoreTeam) => (t.team?.league_form?.matches ? t.team.league_form.win_percentage : null)
-const rosterRank = (t: ScoreTeam) =>
-  t.team?.roster_source === 'recent_matches' && t.team.roster_state ? ROSTER_STATES[t.team.roster_state]?.rank : null
-const lastMatchTime = (t: ScoreTeam) => t.team?.roster_last_match_time ?? t.team?.league_form?.last_match_time ?? null
-const positive = (x: number | null | undefined) => (present(x) && x > 0 ? x : null) // 0 means no data
-
-const farmMetric = (key: Exclude<keyof FarmStats, 'games'>, label: string): ScoreMetric => ({
-  key,
-  label,
-  maxWeight: WEIGHT.low,
-  apply: pair(
-    (t) => positive(t.team?.league_form?.farm?.[key]),
-    fixed(WEIGHT.low, (a, b) => shareGap(a, b, 0.2)),
-  ),
-})
-
-// Artem's metrics and rules (doc rev 3); numbers match the Team Comparison row list
-export const SCORE_METRICS: ScoreMetric[] = [
-  {
-    key: 'rating', // 1: counts only above a 300 gap
-    label: 'Rating',
-    maxWeight: WEIGHT.low,
-    apply: pair(
-      (t) => positive(t.team?.rating),
-      (a, b) => (Math.abs(a - b) > 300 ? { edge: full(a - b), weight: WEIGHT.low } : { edge: 0, weight: WEIGHT.none }),
-    ),
-  },
-  {
-    key: 'last_match_rating', // 2: counts only above a 14 gap
-    label: 'Last match rating',
-    maxWeight: WEIGHT.mediocre,
-    apply: pair(
-      (t) => t.team?.delta,
-      (a, b) => (Math.abs(a - b) > 14 ? { edge: full(a - b), weight: WEIGHT.mediocre } : { edge: 0, weight: WEIGHT.none }),
-    ),
-  },
-  {
-    key: 'rating_change', // 3
-    label: 'Rating change',
-    maxWeight: WEIGHT.huge,
-    apply: pair(
-      (t) => t.team?.rating_change,
-      fixed(WEIGHT.huge, (a, b) => scaled(a - b, 64)),
-    ),
-  },
-  {
-    key: 'roster', // 4: Stable 0, Stand-ins 1, New team 2 (lower is better)
-    label: 'Roster changes',
-    maxWeight: WEIGHT.mediocre,
-    apply: pair(
-      rosterRank,
-      fixed(WEIGHT.mediocre, (a, b) => scaled(b - a, 2)),
-    ),
-  },
-  {
-    key: 'tournament_win_pct', // 5: huge when either team is under 30% or over 70%
-    label: 'Tournament win %',
-    maxWeight: WEIGHT.huge,
-    apply: pair(leagueWinPct, (a, b) => ({
-      edge: scaled(a - b, 30),
-      weight: [a, b].some((x) => x < 30 || x > 70) ? WEIGHT.huge : WEIGHT.mediocre,
-    })),
-  },
-  farmMetric('gold_per_min_top1', 'Top 1 GPM'), // 6
-  farmMetric('gold_per_min_top2', 'Top 2 GPM'), // 7
-  farmMetric('xp_per_min_top1', 'Top 1 XPM'), // 8
-  farmMetric('xp_per_min_top2', 'Top 2 XPM'), // 9
-  {
-    key: 'last_match', // 10: counts only when one team's last match is over 15 days old and the other's is not
-    label: 'Last match',
-    maxWeight: WEIGHT.mediocre,
-    apply: ({ teams, now }) => {
-      const times = teams.map(lastMatchTime)
-      if (times.every((time) => time === null)) return null
-      const [a, b] = times.map((time) => time !== null && now - time <= 15 * DAY)
-      return a === b ? { edge: 0, weight: WEIGHT.none } : { edge: a ? 1 : -1, weight: WEIGHT.mediocre }
-    },
-  },
-  {
-    key: 'rating_matches', // 11
-    label: 'Rating matches',
-    maxWeight: WEIGHT.low,
-    apply: pair(
-      (t) => t.summary?.rating_matches,
-      fixed(WEIGHT.low, (a, b) => shareGap(a, b, 0.5)),
-    ),
-  },
-  {
-    key: 'tournament_matches', // 12: mediocre above an 80 game gap
-    label: 'Tournament + scrim matches',
-    maxWeight: WEIGHT.mediocre,
-    apply: pair(
-      (t) => t.summary?.tournament_matches,
-      (a, b) =>
-        Math.abs(a - b) > 80 ? { edge: full(a - b), weight: WEIGHT.mediocre } : { edge: scaled(a - b, 80), weight: WEIGHT.low },
-    ),
-  },
-  {
-    key: 'pub_win_pct', // 13: counts only when a team is above 60%
-    label: 'Pub win %',
-    maxWeight: WEIGHT.mediocre,
-    apply: pair(
-      (t) => t.summary?.rating_win_percentage,
-      (a, b) => {
-        if (a > 60 && b > 60) return { edge: scaled(a - b, 10), weight: WEIGHT.mediocre }
-        if (a > 60 || b > 60) return { edge: a > 60 ? 1 : -1, weight: WEIGHT.mediocre }
-        return { edge: 0, weight: WEIGHT.none }
-      },
-    ),
-  },
-  {
-    key: 'lobby_win_pct', // 14
-    label: 'Lobby win %',
-    maxWeight: WEIGHT.low,
-    apply: pair(
-      (t) => t.summary?.tournament_win_percentage,
-      fixed(WEIGHT.low, (a, b) => scaled(a - b, 20)),
-    ),
-  },
-  {
-    key: 'avg_rank', // 15: lower is better; mediocre above a 100 gap
-    label: 'Average player rank',
-    maxWeight: WEIGHT.mediocre,
-    apply: pair(
-      (t) => positive(t.summary?.avg_rank),
-      (a, b) =>
-        Math.abs(a - b) > 100 ? { edge: full(b - a), weight: WEIGHT.mediocre } : { edge: scaled(b - a, 100), weight: WEIGHT.low },
-    ),
-  },
-  {
-    key: 'low_rank_players', // 16: fewer is better; gap 1 mediocre, 2+ high
-    label: 'Low rank players',
-    maxWeight: WEIGHT.high,
-    apply: pair(
-      (t) => t.summary?.bad_rank_players,
-      (a, b) => {
-        const gap = Math.abs(a - b)
-        const weight = gap >= 2 ? WEIGHT.high : gap === 1 ? WEIGHT.mediocre : WEIGHT.none
-        return { edge: full(b - a), weight }
-      },
-    ),
-  },
-  {
-    key: 'matches_avg', // 18
-    label: 'Average matches per player',
-    maxWeight: WEIGHT.low,
-    apply: pair(
-      (t) => t.summary?.matches_avg,
-      fixed(WEIGHT.low, (a, b) => shareGap(a, b, 0.5)),
-    ),
-  },
-  {
-    key: 'matches_median', // 19: mediocre at a 14+ gap
-    label: 'Median matches per player',
-    maxWeight: WEIGHT.mediocre,
-    apply: pair(
-      (t) => t.summary?.matches_median,
-      (a, b) =>
-        Math.abs(a - b) >= 14 ? { edge: full(a - b), weight: WEIGHT.mediocre } : { edge: scaled(a - b, 14), weight: WEIGHT.low },
-    ),
-  },
-  {
-    key: 'hero_pool', // 20: only when both teams have a full sample
-    label: 'Hero pool',
-    maxWeight: WEIGHT.low,
-    apply: pair(
-      (t) => (t.meta?.pool_state ? t.meta.sample?.heroes : null),
-      fixed(WEIGHT.low, (a, b) => scaled(a - b, 10)),
-    ),
-  },
-  {
-    key: 'duration', // 23: longer is better
-    label: 'Median match duration',
-    maxWeight: WEIGHT.low,
-    apply: pair(
-      (t) => t.team?.league_form?.duration_median,
-      fixed(WEIGHT.low, (a, b) => scaled(a - b, 300)),
-    ),
-  },
-  {
-    key: 'head_to_head', // 25: only with 2+ games between the teams
-    label: 'Head-to-head',
-    maxWeight: WEIGHT.low,
-    apply: ({ headToHead }) => {
-      if (!headToHead) return null
-      const games = headToHead.team1Wins + headToHead.team2Wins
-      return games >= 2 ? { edge: (headToHead.team1Wins - headToHead.team2Wins) / games, weight: WEIGHT.low } : null
-    },
-  },
-]
+const ruleContext = (rule: ScoreRule, settings: ScoreSettings): RuleContext => {
+  const override = settings.rules?.[rule.key]
+  const points = { ...WEIGHT, ...settings.points }
+  return {
+    weight: (tier) => points[override?.levels?.[tier] ?? rule.levels[tier] ?? 'none'] ?? 0,
+    limit: (name) => override?.limits?.[name] ?? rule.limits?.[name] ?? 0,
+  }
+}
 
 /**
- * Score of team 1 vs team 2: each metric's edge (-1..+1) times its weight, summed. Metrics without data are skipped.
+ * Score of team 1 vs team 2: each rule's edge (-1..+1) times its weight, summed. Rules without data are skipped.
  * @param input both teams' data, the time to judge the last match at, optional head-to-head wins
- * @returns score (+ favours team 1), coverage 0..1 and each metric's part
+ * @param rules the rules to apply (scoreRules.ts SCORE_RULES)
+ * @param settings weight and limit changes on top of the defaults
+ * @returns score (+ favours team 1), coverage 0..1 and each rule's part
  */
-export const computeScore = (input: ScoreInput): TeamScore => {
+export const computeScore = (input: ScoreInput, rules: ScoreRule[], settings: ScoreSettings = {}): TeamScore => {
   const metrics: MetricScore[] = []
   let covered = 0
   let total = 0
-  for (const metric of SCORE_METRICS) {
-    total += metric.maxWeight
-    const applied = metric.apply(input)
+  for (const rule of rules) {
+    const ctx = ruleContext(rule, settings)
+    const top = Math.max(0, ...Object.keys(rule.levels).map(ctx.weight))
+    total += top
+    const applied = rule.apply(input, ctx)
     if (!applied) continue
-    covered += metric.maxWeight
-    metrics.push({ key: metric.key, label: metric.label, ...applied, points: applied.edge * applied.weight })
+    covered += top
+    metrics.push({ key: rule.key, name: rule.name, ...applied, points: applied.edge * applied.weight })
   }
   const score = metrics.reduce((sum, m) => sum + m.points, 0)
   return { score, coverage: total ? covered / total : 0, metrics }
@@ -357,7 +204,7 @@ export const fairProbabilities = (team1Odds: number, team2Odds: number): { team1
 export const expectedValue = (probability: number, odds: number): number => probability * odds - 1
 
 /**
- * A bet is highlighted when its expected value is above +5% and enough metrics had data.
+ * A bet is highlighted when its expected value is above +5% and enough rules had data.
  * @param ev expected value from expectedValue
  * @param coverage coverage from computeScore
  * @returns true for a value bet

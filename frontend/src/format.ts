@@ -12,6 +12,10 @@ export const formatDate = (unixTime: number | null | undefined): string => {
 export const formatPercent = (value: number | null | undefined): string =>
   typeof value === 'number' ? value.toFixed(1) + '%' : '-'
 
+// "+1.5" / "-1.5" / "0.0"; "-" without a value
+export const formatSigned = (value: number | null | undefined): string =>
+  value === null || value === undefined ? '-' : `${value > 0 ? '+' : ''}${value.toFixed(1)}`
+
 export const formatFixed = (value: number | null | undefined, digits: number): string =>
   value ? value.toFixed(digits) : '-'
 

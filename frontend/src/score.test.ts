@@ -8,8 +8,10 @@ import {
   mapWinProbability,
   seriesWinProbability,
   type ScoreInput,
+  type ScoreRule,
   type ScoreTeam,
 } from './score'
+import { SCORE_RULES, headToHeadWins } from './scoreRules'
 import type { MatchesSummary, TeamData } from './types'
 
 const NOW = 1_800_000_000
@@ -112,7 +114,8 @@ const teamB: ScoreTeam = {
 }
 const example: ScoreInput = { teams: [teamA, teamB], now: NOW }
 
-const points = (input: ScoreInput) => Object.fromEntries(computeScore(input).metrics.map((m) => [m.key, m.points]))
+const score = (input: ScoreInput) => computeScore(input, SCORE_RULES)
+const points = (input: ScoreInput) => Object.fromEntries(score(input).metrics.map((m) => [m.key, m.points]))
 const withTeams = (a: Partial<TeamData>, b: Partial<TeamData>): ScoreInput => ({ teams: [{ team: a }, { team: b }], now: NOW })
 
 describe('computeScore', () => {
@@ -139,17 +142,17 @@ describe('computeScore', () => {
   })
 
   it('sums the example to +35 with nearly full coverage', () => {
-    const result = computeScore(example)
+    const result = score(example)
     expect(result.score).toBeCloseTo(34.967, 3)
     expect(result.coverage).toBeCloseTo(84 / 86) // all but head-to-head (low, 2)
   })
 
   it('is symmetric: swapping the teams flips the sign', () => {
-    expect(computeScore({ ...example, teams: [teamB, teamA] }).score).toBeCloseTo(-34.967, 3)
+    expect(score({ ...example, teams: [teamB, teamA] }).score).toBeCloseTo(-34.967, 3)
   })
 
   it('skips metrics without data and reports zero coverage for empty teams', () => {
-    const result = computeScore({ teams: [{}, {}], now: NOW })
+    const result = score({ teams: [{}, {}], now: NOW })
     expect(result).toEqual({ score: 0, coverage: 0, metrics: [] })
   })
 
@@ -194,6 +197,66 @@ describe('computeScore', () => {
   })
 })
 
+describe('rule settings', () => {
+  const rule: ScoreRule = {
+    key: 'gap',
+    name: 'Gap',
+    levels: { base: 'low', big: 'high' },
+    limits: { gap: 10 },
+    apply: (input, ctx) => {
+      const [a, b] = input.teams.map((t) => t.team?.rating ?? 0)
+      return { edge: 1, weight: ctx.weight(Math.abs(a - b) > ctx.limit('gap') ? 'big' : 'base') }
+    },
+  }
+  const input = withTeams({ rating: 1020 }, { rating: 1000 })
+
+  it('uses the default levels and limits', () => {
+    expect(computeScore(input, [rule])).toEqual({ score: 8, coverage: 1, metrics: [{ key: 'gap', name: 'Gap', edge: 1, weight: 8, points: 8 }] })
+  })
+
+  it('applies changed levels, limits and points', () => {
+    expect(computeScore(input, [rule], { rules: { gap: { limits: { gap: 50 } } } }).score).toBe(2)
+    expect(computeScore(input, [rule], { rules: { gap: { levels: { big: 'none' } } } }).score).toBe(0)
+    expect(computeScore(input, [rule], { points: { high: 10 } }).score).toBe(10)
+  })
+
+  it('every table rule has a unique key and only known levels', () => {
+    const keys = SCORE_RULES.map((r) => r.key)
+    expect(new Set(keys).size).toBe(keys.length)
+    expect(keys).toEqual([
+      'rating',
+      'last_match_rating',
+      'rating_change',
+      'roster',
+      'tournament_win_pct',
+      'gold_per_min_top1',
+      'gold_per_min_top2',
+      'xp_per_min_top1',
+      'xp_per_min_top2',
+      'last_match',
+      'rating_matches',
+      'tournament_matches',
+      'pub_win_pct',
+      'lobby_win_pct',
+      'avg_rank',
+      'low_rank_players',
+      'matches_avg',
+      'matches_median',
+      'hero_pool',
+      'duration',
+      'head_to_head',
+    ])
+  })
+})
+
+describe('headToHeadWins', () => {
+  it('counts only known results before the prediction', () => {
+    const match = (team1_won: boolean | null, before_prediction: boolean) => ({ match_id: 1, start_time: 0, team1_won, before_prediction })
+    const data = { since: 0, matches: [match(true, true), match(false, true), match(true, false), match(null, true), match(true, true)] }
+    expect(headToHeadWins(data)).toEqual({ team1Wins: 2, team2Wins: 1 })
+  })
+})
+
 describe('probabilities', () => {
   it('turns a score into a map chance', () => {
     expect(mapWinProbability(0)).toBe(0.5)
@@ -227,12 +290,12 @@ describe('bookmaker comparison', () => {
   })
 
   it('finds the value bet of the worked example', () => {
-    const series = seriesWinProbability(mapWinProbability(computeScore(example).score), 3) ?? 0
+    const series = seriesWinProbability(mapWinProbability(score(example).score), 3) ?? 0
     expect(series).toBeCloseTo(0.692, 3)
     expect(favour(series)).toBe('clear')
     const ev = expectedValue(series, 1.65)
     expect(ev).toBeCloseTo(0.142, 3)
-    expect(isValueBet(ev, computeScore(example).coverage)).toBe(true)
+    expect(isValueBet(ev, score(example).coverage)).toBe(true)
     expect(isValueBet(expectedValue(1 - series, 2.2), 1)).toBe(false)
   })
 

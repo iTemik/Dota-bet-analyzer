@@ -9,6 +9,7 @@ import type {
   TeamMetaSample,
   TeamMetaState,
 } from '../types'
+import { pairRule, scaled, type ScoreRule } from '../score'
 import { RowInfoIcon, type RowInfo } from './RowInfo'
 
 // Leaderboard rank per account id (null: not on the leaderboard); only players whose rank was fetched are in it
@@ -186,6 +187,7 @@ type InsightRow = {
   info?: RowInfo
   needsMeta?: boolean // shown only with team meta (live Compare, not saved snapshots)
   render: (team: TeamData | undefined, ranks: PlayerRanks, meta: TeamMeta | null | undefined) => ReactNode
+  score?: ScoreRule // how the row counts in the team score (score.ts); rows without it are not scored
 }
 
 // Team insights: one row per insight, Team #1 vs Team #2; add new insights to this list
@@ -248,9 +250,19 @@ const insightRows: InsightRow[] = [
     label: 'Median Match Duration',
     info: {
       description: 'Median length of the team’s tournament games in the window (minutes:seconds).',
-      assumption: 'Not used yet; kept for combined stats later.',
+      assumption: 'Longer matches: a higher chance to win; short games: worse players.',
     },
     render: (team) => formatDuration(team?.league_form?.duration_median),
+    score: {
+      key: 'duration',
+      name: 'Median match duration',
+      levels: { base: 'low' }, // longer is better
+      limits: { bigGap: 300 }, // seconds
+      apply: pairRule(
+        (t) => t.team?.league_form?.duration_median,
+        (a, b, ctx) => ({ edge: scaled(a - b, ctx.limit('bigGap')), weight: ctx.weight('base') }),
+      ),
+    },
   },
   {
     label: 'Meta',
@@ -297,6 +309,9 @@ const insightRows: InsightRow[] = [
     render: (_team, _ranks, meta) => renderMetaHeroes(meta),
   },
 ]
+
+// Scoring rules of the rows, in table order
+export const INSIGHT_SCORE_RULES: ScoreRule[] = insightRows.flatMap((row) => (row.score ? [row.score] : []))
 
 /** Team Insights table for two teams; renders live statistics and saved snapshots alike. */
 const InsightsTable = ({ teams, ranks, metas }: InsightsTableProps) => (

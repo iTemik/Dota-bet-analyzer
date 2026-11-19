@@ -1088,3 +1088,18 @@ pre {
 .team-meta-hero .row-info-tooltip {
   white-space: normal;
 }
+
+/* Team score panel (ScorePanel): headline, win chances and each rule's points */
+.score-panel {
+  margin-top: 1.5rem;
+}
+
+.score-headline {
+  font-weight: bold;
+}
+
+.score-table td .score-points {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+}

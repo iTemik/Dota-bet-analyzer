@@ -581,6 +581,15 @@ The backend provides REST API endpoints for team statistics, match data, and pla
 - Falls back to OpenDota team membership (marked unconfirmed) when there was no league match in the window
 - Lineups and team match lists are cached in d2ba.sqlite to keep OpenDota requests low
 
+#### Team Score (Compare page and prediction detail)
+- One weighted score for team 1 vs team 2: each scored Team Comparison / Team Insights row (and head-to-head on a
+  prediction) gives an edge from -1 to +1 times its weight (none 0, low 2, mediocre 5, high/huge 8), some only past a
+  threshold; rules without data are skipped and the share of weight with data is shown (under 60%: low confidence)
+- Map win chance = 1 / (1 + 10^(-score / 150)), series chance for Bo1/Bo3/Bo5, favour label (even, slight, clear,
+  strong favourite at 55/62/72%), and each rule's points as a bar in the favoured team's column
+- Each rule lives in its table row (`score`), so a new scored row joins the score by itself; recalculated every time,
+  no DB change
+
 #### Team Meta (Team Insights "Meta" and "Meta Heroes")
 - Does the team play the Meta tab's pro/ultra heroes, from its 15 newest tournament games (recent window first, then
   60 days): actively (2+ meta heroes in over 65% of drafts and 3+ in over 50%), doesn't play (2+ in 50% or less, or 3+
