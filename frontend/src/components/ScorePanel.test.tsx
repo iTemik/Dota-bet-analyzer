@@ -1,5 +1,6 @@
-import { render, screen, within } from '@testing-library/react'
-import { describe, expect, it } from 'vitest'
+import { fireEvent, render, screen, within } from '@testing-library/react'
+import { beforeEach, describe, expect, it } from 'vitest'
+import { SCORE_SETTINGS_KEY } from '../scoreRules'
 import type { LeagueForm, TeamData } from '../types'
 import ScorePanel from './ScorePanel'
 
@@ -18,12 +19,15 @@ const team = (name: string, rating_change: number, win: number): Partial<TeamDat
   league_form: form(win),
 })
 
+const scoreTable = () => within(document.querySelector('.score-table') as HTMLElement)
 const rowCells = (label: string) =>
-  within(screen.getByText(label).closest('tr') as HTMLElement)
+  within(scoreTable().getByText(label).closest('tr') as HTMLElement)
     .getAllByRole('cell')
     .map((cell) => cell.textContent)
 
 describe('ScorePanel', () => {
+  beforeEach(() => localStorage.clear())
+
   it('shows the favourite, win chances and each rule’s points in the favoured team’s column', () => {
     // rating change 50 / 64 x 8 = 6.25 for Alpha; win % 30 / 30 x 8 (huge: Alpha over 70%) = 8 for Alpha
     render(<ScorePanel teams={[team('Alpha', 40, 80), team('Beta', -10, 50)]} summaries={[null, null]} />)
@@ -51,7 +55,7 @@ describe('ScorePanel', () => {
         bestOf={2}
       />,
     )
-    expect(screen.queryByText('Bo2 win chance')).not.toBeInTheDocument()
+    expect(scoreTable().queryByText('Bo2 win chance')).not.toBeInTheDocument()
     expect(screen.getByText('Even · score 0.0')).toBeInTheDocument()
     expect(screen.getByText(/Even or below their thresholds: Rating, Rating change, Tournament win %\./)).toBeInTheDocument()
   })
@@ -59,5 +63,23 @@ describe('ScorePanel', () => {
   it('warns about low confidence when most rules have no data', () => {
     render(<ScorePanel teams={[team('Alpha', 40, 80), team('Beta', -10, 50)]} summaries={[null, null]} />)
     expect(screen.getByText(/Data for \d+% of the weight: low confidence\./)).toBeInTheDocument()
+  })
+
+  it('recalculates with the weights editor and keeps the change in the browser', () => {
+    render(<ScorePanel teams={[team('Alpha', 40, 80), team('Beta', -10, 50)]} summaries={[null, null]} />)
+    fireEvent.click(screen.getByText('Score weights'))
+    // rating change 50 / 64 x 2 = 1.6 instead of 6.3
+    fireEvent.change(screen.getByRole('combobox', { name: 'Rating change: Weight' }), { target: { value: 'low' } })
+    expect(rowCells('Rating change')).toEqual(['Rating change', '+1.6', ''])
+    expect(screen.getByText('Alpha: slight favourite · score +9.6')).toBeInTheDocument()
+    expect(screen.getByText('Score weights (changed)')).toBeInTheDocument()
+    expect(JSON.parse(localStorage.getItem(SCORE_SETTINGS_KEY) ?? '{}')).toEqual({ rules: { rating_change: { levels: { base: 'low' } } } })
+  })
+
+  it('starts from the weights saved in the browser', () => {
+    localStorage.setItem(SCORE_SETTINGS_KEY, JSON.stringify({ rules: { tournament_win_pct: { levels: { extreme: 'none' } } } }))
+    render(<ScorePanel teams={[team('Alpha', 40, 80), team('Beta', -10, 50)]} summaries={[null, null]} />)
+    expect(scoreTable().queryByText('Tournament win %')).not.toBeInTheDocument() // 0 points: listed as even
+    expect(screen.getByText(/Even or below their thresholds: Tournament win %\./)).toBeInTheDocument()
   })
 })

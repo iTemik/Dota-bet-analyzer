@@ -5,10 +5,12 @@ interface CollapsibleProps {
   children: ReactNode
   /** Open on first render; closed by default. */
   defaultOpen?: boolean
+  /** Render the content only while open (big content that would otherwise always be in the page). */
+  lazy?: boolean
 }
 
 /** A section with a clickable `h2` header that shows or hides its content (raw JSON blocks on the Compare tab). */
-export default function Collapsible({ title, children, defaultOpen = false }: CollapsibleProps) {
+export default function Collapsible({ title, children, defaultOpen = false, lazy = false }: CollapsibleProps) {
   const [open, setOpen] = useState(defaultOpen)
   const expanded = open ? 'expanded' : ''
   return (
@@ -17,7 +19,7 @@ export default function Collapsible({ title, children, defaultOpen = false }: Co
         <h2>{title}</h2>
         <span className={`collapsible-toggle ${expanded}`}>▼</span>
       </div>
-      <div className={`collapsible-content ${expanded}`}>{children}</div>
+      <div className={`collapsible-content ${expanded}`}>{(open || !lazy) && children}</div>
     </>
   )
 }

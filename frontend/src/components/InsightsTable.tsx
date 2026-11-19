@@ -257,7 +257,8 @@ const insightRows: InsightRow[] = [
       key: 'duration',
       name: 'Median match duration',
       levels: { base: 'low' }, // longer is better
-      limits: { bigGap: 300 }, // seconds
+      limits: { bigGap: 300 },
+      labels: { bigGap: 'Full edge at gap (seconds)' },
       apply: pairRule(
         (t) => t.team?.league_form?.duration_median,
         (a, b, ctx) => ({ edge: scaled(a - b, ctx.limit('bigGap')), weight: ctx.weight('base') }),
@@ -310,8 +311,11 @@ const insightRows: InsightRow[] = [
   },
 ]
 
-// Scoring rules of the rows, in table order
-export const INSIGHT_SCORE_RULES: ScoreRule[] = insightRows.flatMap((row) => (row.score ? [row.score] : []))
+// Rows for the team score and its weights editor, in table order: scored rows by rule name, the rest by label
+export const INSIGHT_SCORE_ROWS: { label: string; rule?: ScoreRule }[] = insightRows.map((row) => ({
+  label: row.score?.name ?? row.label,
+  rule: row.score,
+}))
 
 /** Team Insights table for two teams; renders live statistics and saved snapshots alike. */
 const InsightsTable = ({ teams, ranks, metas }: InsightsTableProps) => (

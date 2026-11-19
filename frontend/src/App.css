@@ -1103,3 +1103,36 @@ pre {
   align-items: center;
   gap: 0.5rem;
 }
+
+/* Score weights editor (ScoreWeightsEditor): points per weight word, then one line per table row */
+.score-editor-general {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 0.75rem;
+  margin-bottom: 1rem;
+}
+
+.score-field {
+  display: inline-flex;
+  flex-direction: column;
+  gap: 0.2rem;
+  margin: 0 0.75rem 0.25rem 0;
+  font-size: 0.85rem;
+}
+
+.score-field input {
+  width: 6rem;
+}
+
+.score-editor-table {
+  margin-bottom: 1rem;
+}
+
+.score-editor-changed .row-label {
+  font-weight: bold;
+}
+
+.score-editor-unscored td {
+  opacity: 0.6;
+}
