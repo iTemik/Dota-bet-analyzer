@@ -32,7 +32,7 @@ function FavourTag({ prediction, team }: { prediction: Prediction; team: 1 | 2 |
       className={`favour-tag ${favoured ? 'favour-tag-yes' : 'favour-tag-no'}`}
       title={favoured ? 'Bet on the team our score favours' : 'Bet against the team our score favours'}
     >
-      {favoured ? 'Fav' : 'Not fav'}
+      {favoured ? 'Better' : 'Worse'}
     </span>
   )
 }

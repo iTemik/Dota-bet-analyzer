@@ -53,7 +53,7 @@ describe('PredictionList', () => {
     expect(pending.getByRole('link')).toHaveAttribute('href', '#predictions/3')
     expect(pending.getByRole('link').textContent).toMatch(/^[A-Z][a-z]{2} \d+/)
     const cells = pending.getAllByRole('cell').map((c) => c.textContent)
-    expect(cells.slice(1)).toEqual(['Bo3', '', 'Team A', '', 'Team B', '-', '1.85 / 2.05', 'Team A · 100Not fav', 'Pending +85 / -100',
+    expect(cells.slice(1)).toEqual(['Bo3', '', 'Team A', '', 'Team B', '-', '1.85 / 2.05', 'Team A · 100Worse', 'Pending +85 / -100',
       'Pending +105 / -100'])
 
     expect(within(rows()[1]).getAllByText('No bet')).toHaveLength(3) // bet, outcome, recommended bet
@@ -128,7 +128,7 @@ describe('PredictionList', () => {
     expect(recommended(2)).toHaveTextContent('Lost -100')
     expect(recommended(2)).toHaveClass('outcome-lost')
     // the user bet on team 1, our score favours team 2
-    expect(within(rows()[2]).getByText('Not fav')).toHaveClass('favour-tag', 'favour-tag-no')
+    expect(within(rows()[2]).getByText('Worse')).toHaveClass('favour-tag', 'favour-tag-no')
     const totals = document.querySelectorAll<HTMLElement>('.prediction-totals')
     expect(totals[0]).toHaveTextContent(/^You: Bets: 2 \(\+85\)/)
     expect(totals[1]).toHaveTextContent(
@@ -139,7 +139,7 @@ describe('PredictionList', () => {
   it('tags a bet on the favoured team green', async () => {
     mockList(jsonResponse([prediction({ prediction_id: 4, bet_team: 2 })]))
     render(<PredictionList />)
-    expect(await screen.findByText('Fav')).toHaveClass('favour-tag', 'favour-tag-yes')
+    expect(await screen.findByText('Better')).toHaveClass('favour-tag', 'favour-tag-yes')
   })
 
   it('says when the recommended bets fail to load', async () => {
