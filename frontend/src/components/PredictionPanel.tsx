@@ -1,13 +1,26 @@
-import { useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { postJson, requestJson } from '../api'
 import { formatDateTime, teamName } from '../format'
-import { type BetChoice, SERIES_OPTIONS, decisionBody, decisionErrors } from '../predictions'
+import { type BetChoice, SERIES_OPTIONS, decisionBody, decisionErrors, parseDecimal } from '../predictions'
 import type { BookmakerOdds, StatisticsResult, TeamData } from '../types'
 
 interface PredictionPanelProps {
   teams: (TeamData | undefined)[] // team 1 and team 2
   results: (StatisticsResult | undefined)[] // GET /api/results/{task_id} per team
   days: number // statistics window the teams were loaded with
+  onLineChange?: (line: BookmakerLine) => void // the bookmaker box as typed, for the team score's bookmaker rows
+}
+
+/** Bookmaker box values: odds of team 1 and team 2 (null until valid) and the series length (null = n/a). */
+export interface BookmakerLine {
+  odds: [number, number] | null
+  bestOf: number | null
+}
+
+// Both odds when both are valid decimal odds above 1
+const parseOdds = (odds: string[]): [number, number] | null => {
+  const [a, b] = odds.map(parseDecimal)
+  return a > 1 && b > 1 ? [a, b] : null
 }
 
 // Bookmakers with a "Get odds from ..." button: name shown and GET /api/odds/{key}
@@ -44,7 +57,7 @@ const snapshotBody = (team: TeamData, result: StatisticsResult | undefined, days
  * "Log prediction" panel under the comparison tables. Bookmaker values (odds, series) are in their own box,
  * apart from the decision (bet, stake, comment). Saving stores both team snapshots, then the prediction.
  */
-function PredictionPanel({ teams, results, days }: PredictionPanelProps) {
+function PredictionPanel({ teams, results, days, onLineChange }: PredictionPanelProps) {
   const [odds, setOdds] = useState(['', ''])
   const [bestOf, setBestOf] = useState('3')
   const [bet, setBet] = useState<BetChoice>('none')
@@ -55,6 +68,15 @@ function PredictionPanel({ teams, results, days }: PredictionPanelProps) {
   const [error, setError] = useState<string | null>(null)
   const [saved, setSaved] = useState<SaveResult | null>(null)
   const [oddsStatus, setOddsStatus] = useState<OddsStatus | null>(null)
+
+  // Tell the page about the bookmaker box (also on mount, so a new comparison starts from empty odds)
+  const onLineChangeRef = useRef(onLineChange)
+  useEffect(() => {
+    onLineChangeRef.current = onLineChange
+  })
+  useEffect(() => {
+    onLineChangeRef.current?.({ odds: parseOdds(odds), bestOf: bestOf ? Number(bestOf) : null })
+  }, [odds, bestOf])
 
   // Player statistics are optional: without them the snapshot is saved with an empty summary
   const ready = teams.every(Boolean)

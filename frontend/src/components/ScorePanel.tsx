@@ -1,11 +1,14 @@
 import { useState } from 'react'
-import { formatSigned, teamName } from '../format'
+import { CELL_NEGATIVE, CELL_POSITIVE, formatSigned, teamName } from '../format'
 import {
   FAVOUR_LABELS,
   LOW_COVERAGE,
   WEIGHT,
   computeScore,
+  expectedValue,
+  fairProbabilities,
   favour,
+  isValueBet,
   mapWinProbability,
   seriesWinProbability,
   type ScoreInput,
@@ -20,15 +23,16 @@ interface ScorePanelProps {
   teams: (Partial<TeamData> | undefined)[] // team 1 and team 2
   summaries: (MatchesSummary | null | undefined)[]
   metas?: (TeamMeta | null | undefined)[] // without it (saved snapshots) the meta rules are skipped
-  bestOf?: number | null // series length for the series chance (default Bo3)
+  bestOf?: number | null // series length for the series chance (default Bo3; null = n/a, map chance only)
   now?: number // unix time the Last Match rule is judged at; a saved prediction passes its own time
   headToHead?: ScoreInput['headToHead']
+  odds?: [number, number] | null // bookmaker's series-winner odds of team 1 and team 2: adds the fair chance and value rows
 }
 
 const percent = (p: number): string => `${Math.round(p * 100)}%`
 
 /** Team score of team 1 vs team 2: weighted rules of the table rows, win chances and each rule's points. */
-function ScorePanel({ teams, summaries, metas, bestOf = 3, now, headToHead }: ScorePanelProps) {
+function ScorePanel({ teams, summaries, metas, bestOf = 3, now, headToHead, odds }: ScorePanelProps) {
   const [shownAt] = useState(() => Date.now() / 1000) // live statistics are judged at the time they were shown
   const [settings, setSettings] = useState(loadScoreSettings)
   const changeSettings = (next: typeof settings) => {
@@ -43,12 +47,15 @@ function ScorePanel({ teams, summaries, metas, bestOf = 3, now, headToHead }: Sc
   }
   const { score, coverage, metrics } = computeScore(input, SCORE_RULES, settings)
   const map = mapWinProbability(score, settings.scale)
-  const series = seriesWinProbability(map, bestOf)
+  const series = bestOf ? seriesWinProbability(map, bestOf) : null
   const names = [0, 1].map((i) => teamName(teams[i] as TeamData | undefined, i))
   const label = FAVOUR_LABELS[favour(series ?? map)]
   const favourite = score > 0 ? names[0] : names[1]
   const counted = metrics.filter((m) => m.points !== 0)
   const even = metrics.filter((m) => m.points === 0)
+  const fair = odds ? fairProbabilities(odds[0], odds[1]) : null
+  // Value needs a series chance: the odds are for the series winner (a Bo2 can end in a draw)
+  const values = fair && odds && series !== null ? [expectedValue(series, odds[0]), expectedValue(1 - series, odds[1])] : null
 
   return (
     <div className="score-panel">
@@ -72,9 +79,29 @@ function ScorePanel({ teams, summaries, metas, bestOf = 3, now, headToHead }: Sc
           </tr>
           {series !== null && (
             <tr>
-              <td className="row-label">Bo{bestOf ?? 1} win chance</td>
+              <td className="row-label">Bo{bestOf} win chance</td>
               <td>{percent(series)}</td>
               <td>{percent(1 - series)}</td>
+            </tr>
+          )}
+          {fair && (
+            <tr>
+              <td className="row-label">Bookmaker fair chance</td>
+              <td>{percent(fair.team1)}</td>
+              <td>{percent(fair.team2)}</td>
+            </tr>
+          )}
+          {values && (
+            <tr>
+              <td className="row-label">Value (per 1 unit staked)</td>
+              {values.map((ev, i) => {
+                const valueBet = isValueBet(ev, coverage)
+                return (
+                  <td key={i} className={valueBet ? CELL_POSITIVE : ev < 0 ? CELL_NEGATIVE : undefined}>
+                    {`${ev > 0 ? '+' : ''}${Math.round(ev * 100)}%${valueBet ? ' · value bet' : ''}`}
+                  </td>
+                )
+              })}
             </tr>
           )}
           {counted.map((m) => (
@@ -99,6 +126,13 @@ function ScorePanel({ teams, summaries, metas, bestOf = 3, now, headToHead }: Sc
         {coverage < LOW_COVERAGE ? ': low confidence' : ''}.
         {even.length > 0 && ` Even or below their thresholds: ${even.map((m) => m.name).join(', ')}.`}
       </p>
+      {fair && (
+        <p className="prediction-hint">
+          Bookmaker margin {(fair.margin * 100).toFixed(1)}%, removed from its chances. Value = our series chance × odds
+          - 1; a value bet is above +5% with data for 60%+ of the weight.
+          {!values && ' No value for this series length: the odds are for the series winner.'}
+        </p>
+      )}
       <Collapsible lazy title={`Score weights${settings.points || settings.scale || settings.rules ? ' (changed)' : ''}`}>
         <ScoreWeightsEditor settings={settings} onChange={changeSettings} />
       </Collapsible>

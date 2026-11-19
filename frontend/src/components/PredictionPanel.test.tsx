@@ -74,6 +74,18 @@ describe('PredictionPanel', () => {
     vi.clearAllMocks()
   })
 
+  it('reports the bookmaker box to the page: odds once both are valid, and the series', async () => {
+    const onLineChange = vi.fn()
+    render(<PredictionPanel teams={teams} results={results} days={20} onLineChange={onLineChange} />)
+    expect(onLineChange).toHaveBeenLastCalledWith({ odds: null, bestOf: 3 })
+    await fillOdds('1,65', '2.2')
+    expect(onLineChange).toHaveBeenLastCalledWith({ odds: [1.65, 2.2], bestOf: 3 })
+    await userEvent.selectOptions(within(bookmakerBox()).getByRole('combobox'), 'n/a')
+    expect(onLineChange).toHaveBeenLastCalledWith({ odds: [1.65, 2.2], bestOf: null })
+    await userEvent.clear(within(bookmakerBox()).getAllByRole('textbox')[1])
+    expect(onLineChange).toHaveBeenLastCalledWith({ odds: null, bestOf: null })
+  })
+
   it('is disabled until both teams are known', () => {
     render(<PredictionPanel teams={[teams[0], undefined]} results={results} days={20} />)
     expect(screen.getByRole('button', { name: 'Save prediction' })).toBeDisabled()

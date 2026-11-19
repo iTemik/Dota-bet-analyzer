@@ -9,7 +9,7 @@ import MetaTab from './components/MetaTab'
 import InsightsTable, { type PlayerRanks } from './components/InsightsTable'
 import PredictionDetail from './components/PredictionDetail'
 import PredictionList from './components/PredictionList'
-import PredictionPanel from './components/PredictionPanel'
+import PredictionPanel, { type BookmakerLine } from './components/PredictionPanel'
 import ScorePanel from './components/ScorePanel'
 import TeamAutocomplete from './components/TeamAutocomplete'
 import { requestJson } from './api'
@@ -50,6 +50,7 @@ function App() {
   const team1 = useTeamInput()
   const team2 = useTeamInput()
   const [statistics, setStatistics] = useState<Statistics | null>(null)
+  const [line, setLine] = useState<BookmakerLine | null>(null) // the Log prediction panel's odds and series
   const [summaryData, setSummaryData] = useState<Record<string, StatisticsResult> | null>(null)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -359,13 +360,20 @@ function App() {
               </div>
             </div>
 
-            <ScorePanel teams={teams} summaries={summaries} metas={results.map((r) => r?.meta)} />
+            <ScorePanel
+              teams={teams}
+              summaries={summaries}
+              metas={results.map((r) => r?.meta)}
+              bestOf={line ? line.bestOf : 3}
+              odds={line?.odds}
+            />
 
             <PredictionPanel
               key={teams.map((team) => team?.task_id).join()}
               teams={teams}
               results={results}
               days={STATS_DAYS}
+              onLineChange={setLine}
             />
           </div>
         )}
