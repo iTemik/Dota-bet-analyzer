@@ -32,18 +32,19 @@ CACHE_TTL = 30 * 60  # seconds; longer than the 10-minute `matches` cache job, w
 ERROR_CACHE_TTL = 60  # a failed request is not repeated sooner, to stay inside Liquipedia's limits
 
 LIQUIPEDIA_HOST = "https://liquipedia.net"  # team icon paths on the page are relative to it
-# Match ticker markup: one `match-info` block per series, the two `opponent` blocks hold the team name link
-# (`name` span) and icon, the scoreholder holds "2 : 1" (or "vs") and "(Bo3)"
-MATCH_CLASS = "match-info"
-OPPONENT_CLASS = "match-info-header-opponent"
-SCORE_CLASS = "match-info-header-scoreholder"
+# Match ticker markup (Nov 2026): one `match-ticker-card` per series; the header holds the timer and
+# "Playoffs - Bo3", each of the two `opponent` blocks holds the team (`block-team`: name link and icon) and then
+# a plain div with its map score ("2", "FF", "W"; empty before the series)
+MATCH_CLASS = "match-ticker-card"
+HEADER_CLASS = "match-ticker-card__header"
+OPPONENT_CLASS = "match-ticker-card__opponent"
+TEAM_CLASS = "block-team"
 # Tournament line: `league-icon-small-image` icons (lightmode and darkmode) and the name link
-TOURNAMENT_CLASS = "match-info-tournament"
-TOURNAMENT_NAME_CLASS = "match-info-tournament-name"
+TOURNAMENT_CLASS = "match-ticker-card-tournament"
+TOURNAMENT_NAME_CLASS = "match-ticker-card-tournament-name"
 TOURNAMENT_ICON_CLASS = "league-icon-small-image"
 MISSING_PAGE_SUFFIX = " (page does not exist)"  # title of a link to a team without a wiki page
 BEST_OF_RE = re.compile(r"\bBo\s?(\d)\b")
-SCORE_RE = re.compile(r"(\d+)\s*:\s*(\d+)")
 # Day suffix of a tournament name ("EPC Season 3 - October 26"); the time column shows the date already
 DAY_SUFFIX_RE = re.compile(r"\s+-\s+[A-Z][a-z]+ \d{1,2}$")
 
@@ -156,20 +157,28 @@ def _tournament(node: _Node) -> Optional[dict[str, Optional[str]]]:
     }
 
 
+def _score(opponent: _Node) -> Optional[int]:
+    """Map score of an opponent block (the text next to its team block), None when not a number."""
+    text = "".join(c.text() for c in opponent.children if isinstance(c, _Node) and TEAM_CLASS not in c.classes)
+    return int(text.strip()) if text.strip().isdigit() else None
+
+
 def _parse_match(node: _Node) -> Optional[dict[str, Any]]:
-    """One series from its match block, or None when it lacks a start time or two teams."""
+    """One series from its match card, or None when it lacks a start time or two teams."""
     timers = node.find_all(lambda n: "data-timestamp" in n.attrs)
-    teams = [_team(t) for t in node.find_all(_has_class(OPPONENT_CLASS))]
+    opponents = node.find_all(_has_class(OPPONENT_CLASS))
+    teams = [_team(t) for t in opponents]
     if not timers or len(teams) != 2 or not all(t["name"] for t in teams):
         return None
     try:
         start_time = int(timers[0].attrs["data-timestamp"])
     except ValueError:
         return None
-    score_nodes = node.find_all(_has_class(SCORE_CLASS))
-    score_text = " ".join(score_nodes[0].text(" ").split()) if score_nodes else ""
-    best_of = BEST_OF_RE.search(score_text)
-    score = SCORE_RE.search(score_text)
+    headers = node.find_all(_has_class(HEADER_CLASS))
+    best_of = BEST_OF_RE.search(headers[0].text(" ") if headers else "")
+    scores = [_score(o) for o in opponents]
+    if None in scores:
+        scores = [None, None]  # a forfeit ("FF" / "W") has no map score
     return {
         "start_time": start_time,
         "best_of": int(best_of.group(1)) if best_of else None,
@@ -179,8 +188,8 @@ def _parse_match(node: _Node) -> Optional[dict[str, Any]]:
         "team2_icon": teams[1]["icon"],
         "tournament": _tournament(node),
         "finished": timers[0].attrs.get("data-finished") == "finished",
-        "score1": int(score.group(1)) if score else None,
-        "score2": int(score.group(2)) if score else None,
+        "score1": scores[0],
+        "score2": scores[1],
     }
 
 
