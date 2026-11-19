@@ -42,18 +42,6 @@ TBD = (
 )
 
 
-def score_spans(score: str) -> str:
-    """Scoreholder upper part: "vs" for an upcoming series, else score spans like Liquipedia's."""
-    if score == "vs":
-        return "vs"
-    left, right = score.split(":")
-    return (
-        f'<span class="match-info-header-scoreholder-score">{left}</span>'
-        '<span class="match-info-header-scoreholder-divider">:</span>'
-        f'<span class="match-info-header-scoreholder-score">{right}</span>'
-    )
-
-
 LEAGUE = "Some League 2:3 Bo5 Cup"
 LEAGUE_URL = "https://liquipedia.net/dota2/Some_League/Cup"
 
@@ -66,10 +54,16 @@ def tournament_block(name: str) -> str:
         for mode in ("lightmode", "darkmode")
     )
     return (
-        f'<div class="match-info-tournament"><span>{icons}</span><span class="match-info-tournament-wrapper">'
-        '<span class="match-info-tournament-name"><a href="/dota2/Some_League/Cup#Day" title="Some League/Cup">'
-        f"<span>{name}</span></a></span></span></div>"
+        f'<div class="match-ticker-card-tournament"><span>{icons}</span>'
+        '<span class="match-ticker-card-tournament-wrapper"><span class="match-ticker-card-tournament-name">'
+        f'<a href="/dota2/Some_League/Cup#Day" title="Some League/Cup">{name}</a></span></span></div>'
     )
+
+
+def opponent(team_html: str, score: str, winner: bool = False) -> str:
+    """Opponent block of a match card: the team, then its map score ("" before the series, "FF"/"W" forfeit)."""
+    css = "match-ticker-card&#95;&#95;opponent" + (" winner" if winner else "")
+    return f'<div class="{css}">{team_html}<div>{score}</div></div>'
 
 
 def match_info(
@@ -77,21 +71,19 @@ def match_info(
     team2: str,
     start: int,
     score: str,
-    best_of: str = "(Bo3)",
+    best_of: str = "Bo3",
     finished: bool = False,
     tournament: str = f"{LEAGUE} - October 26",
 ) -> str:
-    """One series of the Liquipedia match ticker (trimmed real markup); an empty tournament leaves its line out."""
+    """One series card of the Liquipedia match ticker (trimmed real markup); an empty tournament leaves it out."""
     done = ' data-finished="finished"' if finished else ""
+    left, right = score.split(":") if ":" in score else ("", "")
     return (
-        '<div class="match-info"><span class="match-info-countdown">'
-        f'<span class="timer-object" data-format="full" data-timestamp="{start}"{done}>October 26, 2026 - 12:00 '
-        '<abbr title="Singapore Time (UTC+8)">SGT</abbr></span></span><div class="match-info-header">'
-        f'<div class="match-info-header-opponent match-info-header-opponent-left">{team1}</div>'
-        '<div class="match-info-header-scoreholder"><span class="match-info-header-scoreholder-scorewrapper">'
-        f'<span class="match-info-header-scoreholder-upper">{score_spans(score)}</span>'
-        f'<span class="match-info-header-scoreholder-lower">{best_of}</span></span></div>'
-        f'<div class="match-info-header-opponent">{team2}</div></div>'
+        '<div class="match-ticker-card"><div class="match-ticker-card&#95;&#95;header">'
+        f'<span class="match-info-countdown"><span class="timer-object" data-format="compact" data-timestamp="{start}"'
+        f'{done}>Oct 26 - 12:00 <abbr title="Singapore Time (UTC+8)">SGT</abbr></span></span>'
+        f"<div>Playoffs{' - ' + best_of if best_of else ''}</div></div>"
+        f'<div class="match-ticker-card&#95;&#95;opponents">{opponent(team1, left)}{opponent(team2, right)}</div>'
         f"{tournament_block(tournament) if tournament else ''}</div>"
     )
 
@@ -100,14 +92,14 @@ PAGE = (
     # Upcoming tab
     '<div data-filter-expansion-template="type=upcoming"><div class="">'
     + match_info(team("Team Alpha", "Alpha"), team("Beta Squad", "BETA", page=False), NOW + 7200, "vs")
-    + match_info(team("Gamma", "GAM", dark_icon=True), team("Team Alpha", "Alpha"), NOW + 3600, "vs", "(Bo5)")
+    + match_info(team("Gamma", "GAM", dark_icon=True), team("Team Alpha", "Alpha"), NOW + 3600, "vs", "Bo5")
     + match_info(TBD, TBD, NOW + 9000, "vs", "", tournament="")
     + '</div></div><div class="toggle-area-content-inactive" data-toggle-area-content="2">'
     # Recent tab
     + match_info(team("Beta Squad", "BETA"), team("Delta", "DEL"), NOW - 9000, "2:1", finished=True)
     + match_info(team("Gamma", "GAM"), team("Team Alpha", "Alpha"), NOW - 20000, "0:2", finished=True)
     + match_info(team("Delta", "DEL"), team("Gamma", "GAM"), NOW - 30000, "FF:W", "", True, f"{LEAGUE} - Playoffs")
-    + '<div class="match-info"><span class="timer-object" data-timestamp="1">x</span></div></div>'
+    + '<div class="match-ticker-card"><span class="timer-object" data-timestamp="1">x</span></div></div>'
 )
 
 
