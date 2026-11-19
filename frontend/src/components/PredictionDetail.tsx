@@ -337,7 +337,14 @@ function PredictionDetail({ predictionId }: PredictionDetailProps) {
         onLoad={(data) => setHeadToHead(headToHeadWins(data))}
       />
 
-      <ScorePanel teams={teams} summaries={summaries} bestOf={detail.best_of} now={detail.created_at} headToHead={headToHead} />
+      <ScorePanel
+        teams={teams}
+        summaries={summaries}
+        bestOf={detail.best_of}
+        now={detail.created_at}
+        headToHead={headToHead}
+        odds={[detail.team1_odds, detail.team2_odds]}
+      />
 
       <div className="prediction-panel">
         <h2>Prediction</h2>

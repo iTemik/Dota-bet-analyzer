@@ -82,4 +82,72 @@ describe('ScorePanel', () => {
     expect(scoreTable().queryByText('Tournament win %')).not.toBeInTheDocument() // 0 points: listed as even
     expect(screen.getByText(/Even or below their thresholds: Tournament win %\./)).toBeInTheDocument()
   })
+
+  describe('bookmaker rows', () => {
+    const NOW = 1_800_000_000
+    // Enough data for 67% of the weight: equal values everywhere except rating change and tournament win %
+    const fullTeam = (name: string, rating_change: number, win: number): Partial<TeamData> => ({
+      ...team(name, rating_change, win),
+      rating: 1400,
+      delta: 0,
+      roster_source: 'recent_matches',
+      roster_state: 'stable',
+      roster_last_match_time: NOW - 86400,
+      league_form: {
+        ...form(win),
+        duration_median: 2000,
+        farm: { games: 10, gold_per_min_top1: 600, gold_per_min_top2: 500, xp_per_min_top1: 700, xp_per_min_top2: 600 },
+      },
+    })
+    const summary = {
+      rating_matches: 0,
+      tournament_matches: 50,
+      other_matches: 0,
+      matches_median: null,
+      matches_avg: null,
+      win_percentage: null,
+      rating_win_percentage: null,
+      tournament_win_percentage: null,
+      avg_rank: null,
+      bad_rank_players: 0,
+    }
+
+    it('shows the fair chance without the margin and flags a value bet', () => {
+      // score +14.3, Bo3 58% for Alpha; odds 2.5 / 1.6: fair 39% / 61%, margin 2.5%
+      render(
+        <ScorePanel
+          teams={[fullTeam('Alpha', 40, 80), fullTeam('Beta', -10, 50)]}
+          summaries={[summary, summary]}
+          now={NOW}
+          odds={[2.5, 1.6]}
+        />,
+      )
+      expect(document.querySelector('.score-panel')).toHaveTextContent(/Data for \d+% of the weight\. /)
+      expect(rowCells('Bookmaker fair chance')).toEqual(['Bookmaker fair chance', '39%', '61%'])
+      expect(rowCells('Value (per 1 unit staked)')).toEqual(['Value (per 1 unit staked)', '+45% · value bet', '-33%'])
+      const [, alpha, beta] = within(scoreTable().getByText('Value (per 1 unit staked)').closest('tr') as HTMLElement).getAllByRole('cell')
+      expect(alpha).toHaveClass('cell-pos')
+      expect(beta).toHaveClass('cell-neg')
+      expect(screen.getByText(/Bookmaker margin 2\.5%, removed from its chances\./)).toBeInTheDocument()
+    })
+
+    it('does not flag a value bet with low confidence', () => {
+      render(<ScorePanel teams={[team('Alpha', 40, 80), team('Beta', -10, 50)]} summaries={[null, null]} odds={[2.5, 1.6]} />)
+      expect(rowCells('Value (per 1 unit staked)')).toEqual(['Value (per 1 unit staked)', '+45%', '-33%'])
+    })
+
+    it('shows no value for a Bo2 or n/a series', () => {
+      render(
+        <ScorePanel teams={[team('Alpha', 40, 80), team('Beta', -10, 50)]} summaries={[null, null]} bestOf={null} odds={[2.5, 1.6]} />,
+      )
+      expect(scoreTable().queryByText(/win chance$/, { selector: 'td' })).toHaveTextContent('Map win chance')
+      expect(scoreTable().queryByText('Value (per 1 unit staked)')).not.toBeInTheDocument()
+      expect(screen.getByText(/No value for this series length/)).toBeInTheDocument()
+    })
+
+    it('shows no bookmaker rows without odds', () => {
+      render(<ScorePanel teams={[team('Alpha', 40, 80), team('Beta', -10, 50)]} summaries={[null, null]} />)
+      expect(scoreTable().queryByText('Bookmaker fair chance')).not.toBeInTheDocument()
+    })
+  })
 })

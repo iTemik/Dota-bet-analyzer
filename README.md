@@ -592,6 +592,9 @@ The backend provides REST API endpoints for team statistics, match data, and pla
 - "Score weights" editor in the panel: every row of the scored tables in table order (unscored rows shown as "Not
   scored"), weight word per tier and limits per rule, points per word and the confidence knob; changes apply at once,
   are kept in the browser, and reset per rule or all
+- Bookmaker rows once odds are known (typed or from "Get odds from Pari" on Compare, the saved odds on a prediction):
+  fair chance per team with the bookmaker margin removed, and value = our series chance × odds - 1, marked "value
+  bet" above +5% when data covers 60%+ of the weight (Bo1/Bo3/Bo5 only: the odds are for the series winner)
 
 #### Team Meta (Team Insights "Meta" and "Meta Heroes")
 - Does the team play the Meta tab's pro/ultra heroes, from its 15 newest tournament games (recent window first, then
