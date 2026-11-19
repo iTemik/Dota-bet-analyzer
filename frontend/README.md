@@ -1,4 +1,4 @@
-# Dota.Bet.Analyzer Frontend
+# Dota-bet-analyzer Frontend
 
 A Vite + React + TypeScript frontend application for analyzing Dota 2 team statistics.
 

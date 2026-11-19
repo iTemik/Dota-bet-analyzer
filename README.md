@@ -1,4 +1,4 @@
-# dota.Bet.Analyzer
+# Dota-bet-analyzer
 
 The web application provides analytic services and highlights about the Dota 2 teams on the pro scene to help make better-informed bets. This README covers getting started with development, testing, database initialization, and running the backend.
 
@@ -27,8 +27,8 @@ Get the project running **from scratch**. Choose your platform:
 # - Docker Desktop: https://www.docker.com/products/docker-desktop/
 
 # 2. Clone and navigate
-git clone https://github.com/iTemik/dota.Bet.Analyzer.git
-cd dota.Bet.Analyzer
+git clone https://github.com/iTemik/Dota-bet-analyzer.git
+cd Dota-bet-analyzer
 
 # 3. Set execution policy (once per machine)
 Set-ExecutionPolicy -ExecutionPolicy RemoteSigned -Scope CurrentUser
@@ -64,8 +64,8 @@ Next times: `docker start redis-dota`, then `npm run dev` in the project folder.
 # Linux: sudo apt install python3.14 nodejs docker.io
 
 # 2. Clone and navigate
-git clone https://github.com/iTemik/dota.Bet.Analyzer.git
-cd dota.Bet.Analyzer
+git clone https://github.com/iTemik/Dota-bet-analyzer.git
+cd Dota-bet-analyzer
 
 # 3. Create virtual environment
 python3 -m venv .venv
@@ -152,7 +152,7 @@ Once your environment is set up, these are the commands you'll use most:
 ## 📂 Project Structure (First Look)
 
 ```
-dota.Bet.Analyzer/
+Dota-bet-analyzer/
 ├── backend/                 # Flask API + Celery tasks
 │   ├── __init__.py         # App factory (create_app)
 │   ├── routes/             # API routes, one module per area
