@@ -595,6 +595,9 @@ The backend provides REST API endpoints for team statistics, match data, and pla
 - Bookmaker rows once odds are known (typed or from "Get odds from Pari" on Compare, the saved odds on a prediction):
   fair chance per team with the bookmaker margin removed, and value = our series chance × odds - 1, marked "value
   bet" above +5% when data covers 60%+ of the weight (Bo1/Bo3/Bo5 only: the odds are for the series winner)
+- Predictions tab "Score calibration" (opens on click): settled predictions scored again from their snapshots with the
+  current weights, Brier score and favourite hit rate next to the bookmaker's fair chances, results per favour label
+  against its expected range, and the result of 1 unit on every value bet; warns below 30 results
 
 #### Team Meta (Team Insights "Meta" and "Meta Heroes")
 - Does the team play the Meta tab's pro/ultra heroes, from its 15 newest tournament games (recent window first, then

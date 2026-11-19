@@ -1,5 +1,5 @@
 // Helpers shared by the Predictions list and the prediction detail page
-import type { Prediction } from './types'
+import type { Prediction, Snapshot, TeamData } from './types'
 
 export type Outcome = 'won' | 'lost' | 'no_bet' | 'pending'
 
@@ -104,3 +104,7 @@ export const resultOptions = (bestOf: number | null): [number, number][] => {
   const wins: [number, number][] = Array.from({ length: toWin }, (_, lost) => [toWin, lost])
   return [...wins, ...wins.map(([w, l]): [number, number] => [l, w]).reverse()]
 }
+
+// The team as saved in a snapshot, with the player lists the tables expect
+export const snapshotTeam = (snapshot: Snapshot): TeamData =>
+  ({ players: [], other_players: [], ...snapshot.data.team }) as TeamData

@@ -6,6 +6,8 @@ import type { Prediction } from '../types'
 import { bestOfLabel, scoreLabel, usePage } from '../series'
 import { Pager, TeamCells } from './seriesTable'
 import BetOutcome, { Loss, Profit, SIMULATION_NOTE } from './BetOutcome'
+import CalibrationPanel from './CalibrationPanel'
+import Collapsible from './Collapsible'
 
 type Filter = 'all' | 'pending' | 'settled'
 
@@ -126,6 +128,12 @@ function PredictionList() {
         <p>{predictions.length ? 'No predictions match this filter.' : 'No predictions yet. Log one on the Compare tab.'}</p>
       ) : (
         <PredictionTable key={filter} predictions={filtered} />
+      )}
+
+      {predictions.some(isSettled) && (
+        <Collapsible lazy title="Score calibration">
+          <CalibrationPanel predictions={predictions} />
+        </Collapsible>
       )}
     </section>
   )

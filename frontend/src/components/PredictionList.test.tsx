@@ -99,6 +99,22 @@ describe('PredictionList', () => {
     expect(screen.getByText('Page 1 of 2')).toBeInTheDocument()
   })
 
+  it('offers a Score calibration section, closed until clicked, only with settled predictions', async () => {
+    const fetchMock = mockList()
+    render(<PredictionList />)
+    const header = await screen.findByRole('heading', { name: 'Score calibration' })
+    expect(fetchMock).toHaveBeenCalledTimes(1) // the snapshots load only when the section opens
+    await userEvent.click(header)
+    expect(fetchMock.mock.calls.map(([url]) => url)).toEqual(['/api/predictions', '/api/predictions/2', '/api/predictions/1'])
+  })
+
+  it('has no Score calibration section without settled predictions', async () => {
+    mockList(jsonResponse([prediction({ prediction_id: 3 })]))
+    render(<PredictionList />)
+    await screen.findAllByRole('row')
+    expect(screen.queryByRole('heading', { name: 'Score calibration' })).not.toBeInTheDocument()
+  })
+
   it('says when there are no predictions yet', async () => {
     mockList(jsonResponse([]))
     render(<PredictionList />)
