@@ -17,6 +17,8 @@ import ComparisonTable from './ComparisonTable'
 import BetOutcome from './BetOutcome'
 import HeadToHeadTable from './HeadToHeadTable'
 import InsightsTable, { type PlayerRanks } from './InsightsTable'
+import { headToHeadWins } from '../scoreRules'
+import ScorePanel from './ScorePanel'
 
 interface PredictionDetailProps {
   predictionId: number
@@ -255,6 +257,7 @@ function PredictionDetail({ predictionId }: PredictionDetailProps) {
   const [reviewing, setReviewing] = useState(false)
   const [editing, setEditing] = useState(false)
   const [deleteError, setDeleteError] = useState<string | null>(null)
+  const [headToHead, setHeadToHead] = useState<{ team1Wins: number; team2Wins: number } | null>(null)
 
   useEffect(() => {
     let cancelled = false
@@ -327,7 +330,14 @@ function PredictionDetail({ predictionId }: PredictionDetailProps) {
       </div>
 
       <h2>Head-to-head</h2>
-      <HeadToHeadTable predictionId={detail.prediction_id} predictedAt={detail.created_at} teamNames={names} />
+      <HeadToHeadTable
+        predictionId={detail.prediction_id}
+        predictedAt={detail.created_at}
+        teamNames={names}
+        onLoad={(data) => setHeadToHead(headToHeadWins(data))}
+      />
+
+      <ScorePanel teams={teams} summaries={summaries} bestOf={detail.best_of} now={detail.created_at} headToHead={headToHead} />
 
       <div className="prediction-panel">
         <h2>Prediction</h2>

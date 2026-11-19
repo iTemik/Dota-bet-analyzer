@@ -1,6 +1,7 @@
 import { useState, type ReactNode } from 'react'
-import { CELL_NEGATIVE, CELL_POSITIVE, formatDate, formatFixed, formatPercent, teamName } from '../format'
+import { CELL_NEGATIVE, CELL_POSITIVE, formatDate, formatFixed, formatPercent, formatSigned, teamName } from '../format'
 import { ROSTER_STATES, getStandins } from '../roster'
+import { full, pairRule, positive, scaled, shareGap, type ScoreRule, type ScoreTeam } from '../score'
 import type { FarmStats, LeagueForm, MatchesSummary, TeamData, TeamMeta, TeamPoolState } from '../types'
 import { RowInfoIcon, type RowInfo } from './RowInfo'
 
@@ -29,6 +30,7 @@ interface CompareRowConfig {
   thresholdPercent?: number // differences up to this % of the smaller value are not coloured
   color?: (team: TeamData | undefined, index: number) => string // per-team cell class, for rows that don't compare
   render: (team: TeamData | undefined, summary: Summary, meta: Meta) => ReactNode
+  score?: ScoreRule // how the row counts in the team score (score.ts); rows without it are not scored
 }
 
 // Cell classes for team 1 and team 2: the better value is positive, the other negative
@@ -94,6 +96,9 @@ const getDeltaClass = (delta: number | undefined): string => {
 const getRosterRank = (team: TeamData | undefined): number | null =>
   team?.roster_source === 'recent_matches' && team.roster_state ? (ROSTER_STATES[team.roster_state]?.rank ?? null) : null
 
+const scoreRosterRank = (t: ScoreTeam): number | null =>
+  t.team?.roster_source === 'recent_matches' && t.team.roster_state ? (ROSTER_STATES[t.team.roster_state]?.rank ?? null) : null
+
 const renderRosterState = (team: TeamData | undefined) => {
   const state = team?.roster_source === 'recent_matches' && team.roster_state ? ROSTER_STATES[team.roster_state] : null
   if (!team || !state) return '-'
@@ -104,7 +109,7 @@ const renderRosterState = (team: TeamData | undefined) => {
 
 const STALE_DAYS = 14 // a last match older than this is a long break
 
-const lastMatchTime = (team: TeamData | undefined): number | null => team?.roster_last_match_time ?? team?.league_form?.last_match_time ?? null
+const lastMatchTime = (team: Partial<TeamData> | null | undefined): number | null => team?.roster_last_match_time ?? team?.league_form?.last_match_time ?? null
 
 // Last Match: a team on a long break (or with no date) is red when the other team played recently
 const lastMatchColor = (teams: (TeamData | undefined)[], now: number) => {
@@ -119,9 +124,6 @@ const formatLeagueRecord = (form: LeagueForm | null | undefined): string => {
   if (!form || !form.matches) return '-'
   return `${form.wins}-${form.losses} (${(form.win_percentage ?? 0).toFixed(1)}%)`
 }
-
-const formatSigned = (value: number | null | undefined): string =>
-  value === null || value === undefined ? '-' : `${value > 0 ? '+' : ''}${value.toFixed(1)}`
 
 const FARM_THRESHOLD_PERCENT = 15 // GPM and XPM differences up to this % are not coloured
 
@@ -148,6 +150,16 @@ const farmRows = (): CompareRowConfig[] =>
       better: 'higher',
       thresholdPercent: FARM_THRESHOLD_PERCENT,
       render: (team) => formatFixed(value(team), 0),
+      score: {
+        key,
+        name: label,
+        levels: { base: 'low' },
+        limits: { bigShare: 0.2 },
+        apply: pairRule(
+          (t) => positive(t.team?.league_form?.farm?.[key]),
+          (a, b, ctx) => ({ edge: shareGap(a, b, ctx.limit('bigShare')), weight: ctx.weight('base') }),
+        ),
+      },
     }
   })
 
@@ -167,6 +179,16 @@ const compareRows = (teams: (TeamData | undefined)[], days: number, now: number)
     better: 'higher',
     threshold: 100,
     render: (team) => (team?.rating ? team.rating : '-'),
+    score: {
+      key: 'rating',
+      name: 'Rating',
+      levels: { big: 'low' }, // counts only above the gap
+      limits: { gap: 300 },
+      apply: pairRule(
+        (t) => positive(t.team?.rating),
+        (a, b, ctx) => (Math.abs(a - b) > ctx.limit('gap') ? { edge: full(a - b), weight: ctx.weight('big') } : { edge: 0, weight: 0 }),
+      ),
+    },
   },
   {
     label: 'Last match rating',
@@ -179,6 +201,16 @@ const compareRows = (teams: (TeamData | undefined)[], days: number, now: number)
     },
     color: (team) => getDeltaClass(team?.delta),
     render: (team) => (team?.delta ? `${team.delta > 0 ? '+' : ''}${team.delta.toFixed(1)}` : '-'),
+    score: {
+      key: 'last_match_rating',
+      name: 'Last match rating',
+      levels: { big: 'mediocre' }, // counts only above the gap
+      limits: { gap: 14 },
+      apply: pairRule(
+        (t) => t.team?.delta,
+        (a, b, ctx) => (Math.abs(a - b) > ctx.limit('gap') ? { edge: full(a - b), weight: ctx.weight('big') } : { edge: 0, weight: 0 }),
+      ),
+    },
   },
   {
     label: `Rating change, last ${teams[0]?.league_form?.days ?? days} days`,
@@ -192,6 +224,16 @@ const compareRows = (teams: (TeamData | undefined)[], days: number, now: number)
     better: 'higher',
     threshold: 16,
     render: (team) => formatSigned(team?.rating_change),
+    score: {
+      key: 'rating_change',
+      name: 'Rating change',
+      levels: { base: 'huge' },
+      limits: { bigGap: 64 },
+      apply: pairRule(
+        (t) => t.team?.rating_change,
+        (a, b, ctx) => ({ edge: scaled(a - b, ctx.limit('bigGap')), weight: ctx.weight('base') }),
+      ),
+    },
   },
   {
     label: 'Roster Changes',
@@ -204,6 +246,13 @@ const compareRows = (teams: (TeamData | undefined)[], days: number, now: number)
     compare: getRosterRank,
     better: 'lower',
     render: renderRosterState,
+    score: {
+      key: 'roster',
+      name: 'Roster changes',
+      levels: { base: 'mediocre' },
+      limits: { bigGap: 2 }, // Stable 0, Stand-ins 1, New team 2
+      apply: pairRule(scoreRosterRank, (a, b, ctx) => ({ edge: scaled(b - a, ctx.limit('bigGap')), weight: ctx.weight('base') })),
+    },
   },
   {
     label: `Tournament matches, last ${teams[0]?.league_form?.days ?? days} days`,
@@ -216,6 +265,19 @@ const compareRows = (teams: (TeamData | undefined)[], days: number, now: number)
     compare: (team) => team?.league_form?.win_percentage ?? null,
     better: 'higher',
     render: (team) => formatLeagueRecord(team?.league_form),
+    score: {
+      key: 'tournament_win_pct',
+      name: 'Tournament win %',
+      levels: { base: 'mediocre', extreme: 'huge' }, // extreme: either team under `low` or over `high`
+      limits: { bigGap: 30, low: 30, high: 70 },
+      apply: pairRule(
+        (t) => (t.team?.league_form?.matches ? t.team.league_form.win_percentage : null),
+        (a, b, ctx) => ({
+          edge: scaled(a - b, ctx.limit('bigGap')),
+          weight: ctx.weight([a, b].some((x) => x < ctx.limit('low') || x > ctx.limit('high')) ? 'extreme' : 'base'),
+        }),
+      ),
+    },
   },
   ...farmRows(),
   {
@@ -227,6 +289,18 @@ const compareRows = (teams: (TeamData | undefined)[], days: number, now: number)
     },
     color: lastMatchColor(teams, now),
     render: (team) => formatDate(lastMatchTime(team)),
+    score: {
+      key: 'last_match',
+      name: 'Last match',
+      levels: { stale: 'mediocre' }, // counts only when one team's last match is older than `days` and the other's is not
+      limits: { days: 15 },
+      apply: ({ teams, now }, ctx) => {
+        const times = teams.map((t) => lastMatchTime(t.team))
+        if (times.every((time) => time === null)) return null
+        const [a, b] = times.map((time) => time !== null && now - time <= ctx.limit('days') * 24 * 3600)
+        return a === b ? { edge: 0, weight: 0 } : { edge: a ? 1 : -1, weight: ctx.weight('stale') }
+      },
+    },
   },
   {
     label: 'Rating Matches',
@@ -240,6 +314,16 @@ const compareRows = (teams: (TeamData | undefined)[], days: number, now: number)
     compare: (_, s) => s?.rating_matches ?? null,
     better: 'higher',
     render: (_, s) => String(s?.rating_matches ?? '-'),
+    score: {
+      key: 'rating_matches',
+      name: 'Rating matches',
+      levels: { base: 'low' },
+      limits: { bigShare: 0.5 },
+      apply: pairRule(
+        (t) => t.summary?.rating_matches,
+        (a, b, ctx) => ({ edge: shareGap(a, b, ctx.limit('bigShare')), weight: ctx.weight('base') }),
+      ),
+    },
   },
   {
     label: 'Tournament + scrim matches',
@@ -254,6 +338,19 @@ const compareRows = (teams: (TeamData | undefined)[], days: number, now: number)
     compare: (_, s) => s?.tournament_matches ?? null,
     better: 'higher',
     render: (_, s) => String(s?.tournament_matches ?? '-'),
+    score: {
+      key: 'tournament_matches',
+      name: 'Tournament + scrim matches',
+      levels: { base: 'low', big: 'mediocre' }, // big: above the gap (about 15 games per player)
+      limits: { gap: 80 },
+      apply: pairRule(
+        (t) => t.summary?.tournament_matches,
+        (a, b, ctx) =>
+          Math.abs(a - b) > ctx.limit('gap')
+            ? { edge: full(a - b), weight: ctx.weight('big') }
+            : { edge: scaled(a - b, ctx.limit('gap')), weight: ctx.weight('base') },
+      ),
+    },
   },
   {
     label: 'Pub Win %',
@@ -266,6 +363,21 @@ const compareRows = (teams: (TeamData | undefined)[], days: number, now: number)
     compare: (_, s) => s?.rating_win_percentage ?? null,
     better: 'higher',
     render: (_, s) => formatPercent(s?.rating_win_percentage),
+    score: {
+      key: 'pub_win_pct',
+      name: 'Pub win %',
+      levels: { high: 'mediocre' }, // counts only when a team is above `above`
+      limits: { above: 60, bigGap: 10 },
+      apply: pairRule(
+        (t) => t.summary?.rating_win_percentage,
+        (a, b, ctx) => {
+          const above = ctx.limit('above')
+          if (a > above && b > above) return { edge: scaled(a - b, ctx.limit('bigGap')), weight: ctx.weight('high') }
+          if (a > above || b > above) return { edge: a > above ? 1 : -1, weight: ctx.weight('high') }
+          return { edge: 0, weight: 0 }
+        },
+      ),
+    },
   },
   {
     label: 'Lobby Win %',
@@ -278,6 +390,16 @@ const compareRows = (teams: (TeamData | undefined)[], days: number, now: number)
     compare: (_, s) => s?.tournament_win_percentage ?? null,
     better: 'higher',
     render: (_, s) => formatPercent(s?.tournament_win_percentage),
+    score: {
+      key: 'lobby_win_pct',
+      name: 'Lobby win %',
+      levels: { base: 'low' },
+      limits: { bigGap: 20 },
+      apply: pairRule(
+        (t) => t.summary?.tournament_win_percentage,
+        (a, b, ctx) => ({ edge: scaled(a - b, ctx.limit('bigGap')), weight: ctx.weight('base') }),
+      ),
+    },
   },
   {
     label: 'Average Player Rank',
@@ -291,6 +413,19 @@ const compareRows = (teams: (TeamData | undefined)[], days: number, now: number)
     compare: (_, s) => s?.avg_rank ?? null,
     better: 'lower',
     render: (_, s) => formatFixed(s?.avg_rank, 0),
+    score: {
+      key: 'avg_rank',
+      name: 'Average player rank',
+      levels: { base: 'low', big: 'mediocre' }, // lower rank is better; big: above the gap
+      limits: { gap: 100 },
+      apply: pairRule(
+        (t) => positive(t.summary?.avg_rank),
+        (a, b, ctx) =>
+          Math.abs(a - b) > ctx.limit('gap')
+            ? { edge: full(b - a), weight: ctx.weight('big') }
+            : { edge: scaled(b - a, ctx.limit('gap')), weight: ctx.weight('base') },
+      ),
+    },
   },
   {
     label: 'Low Rank Players',
@@ -303,6 +438,18 @@ const compareRows = (teams: (TeamData | undefined)[], days: number, now: number)
     compare: (_, s) => s?.bad_rank_players ?? null,
     better: 'lower',
     render: (_, s) => String(s?.bad_rank_players ?? '-'),
+    score: {
+      key: 'low_rank_players',
+      name: 'Low rank players',
+      levels: { one: 'mediocre', more: 'high' }, // fewer is better; one: gap of 1, more: gap of 2+
+      apply: pairRule(
+        (t) => t.summary?.bad_rank_players,
+        (a, b, ctx) => {
+          const gap = Math.abs(a - b)
+          return { edge: full(b - a), weight: gap >= 2 ? ctx.weight('more') : gap === 1 ? ctx.weight('one') : 0 }
+        },
+      ),
+    },
   },
   {
     label: 'Other Matches',
@@ -326,6 +473,16 @@ const compareRows = (teams: (TeamData | undefined)[], days: number, now: number)
     compare: (_, s) => s?.matches_avg ?? null,
     better: 'higher',
     render: (_, s) => formatFixed(s?.matches_avg, 2),
+    score: {
+      key: 'matches_avg',
+      name: 'Average matches per player',
+      levels: { base: 'low' },
+      limits: { bigShare: 0.5 },
+      apply: pairRule(
+        (t) => t.summary?.matches_avg,
+        (a, b, ctx) => ({ edge: shareGap(a, b, ctx.limit('bigShare')), weight: ctx.weight('base') }),
+      ),
+    },
   },
   {
     label: 'Median Matches Per Player',
@@ -340,6 +497,19 @@ const compareRows = (teams: (TeamData | undefined)[], days: number, now: number)
     compare: (_, s) => s?.matches_median ?? null,
     better: 'higher',
     render: (_, s) => formatFixed(s?.matches_median, 2),
+    score: {
+      key: 'matches_median',
+      name: 'Median matches per player',
+      levels: { base: 'low', big: 'mediocre' }, // big: at the gap or more
+      limits: { gap: 14 },
+      apply: pairRule(
+        (t) => t.summary?.matches_median,
+        (a, b, ctx) =>
+          Math.abs(a - b) >= ctx.limit('gap')
+            ? { edge: full(a - b), weight: ctx.weight('big') }
+            : { edge: scaled(a - b, ctx.limit('gap')), weight: ctx.weight('base') },
+      ),
+    },
   },
 ]
 
@@ -381,7 +551,20 @@ const heroPoolRow: CompareRowConfig = {
   better: 'higher',
   threshold: 3,
   render: (_t, _s, meta) => formatHeroPool(meta),
+  score: {
+    key: 'hero_pool',
+    name: 'Hero pool',
+    levels: { base: 'low' }, // only when both teams have a full sample
+    limits: { bigGap: 10 },
+    apply: pairRule(
+      (t) => (t.meta?.pool_state ? t.meta.sample?.heroes : null),
+      (a, b, ctx) => ({ edge: scaled(a - b, ctx.limit('bigGap')), weight: ctx.weight('base') }),
+    ),
+  },
 }
+
+// Scoring rules of the rows, in table order (rules don't depend on the labels' window or time)
+export const COMPARISON_SCORE_RULES: ScoreRule[] = [...compareRows([], 0, 0), heroPoolRow].flatMap((row) => (row.score ? [row.score] : []))
 
 /** Team Comparison table for two teams; renders live statistics and saved snapshots alike. */
 const ComparisonTable = ({ teams, summaries, showSummaryRows, days, now, metas }: ComparisonTableProps) => {

@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { formatDateTime, formatShortDateTime } from '../format'
 import { requestJson } from '../api'
 import type { HeadToHead } from '../types'
@@ -8,17 +8,26 @@ interface HeadToHeadTableProps {
   // When the prediction was saved (unix seconds), shown as a row between the matches after and before it
   predictedAt: number
   teamNames: string[]
+  onLoad?: (data: HeadToHead) => void // called once the matches have arrived (the team score uses them)
 }
 
 /** League matches between the prediction's two teams, newest first; matches before the prediction are tagged. */
-function HeadToHeadTable({ predictionId, predictedAt, teamNames }: HeadToHeadTableProps) {
+function HeadToHeadTable({ predictionId, predictedAt, teamNames, onLoad }: HeadToHeadTableProps) {
   const [data, setData] = useState<HeadToHead | null>(null)
   const [error, setError] = useState<string | null>(null)
+  const onLoadRef = useRef(onLoad)
+  useEffect(() => {
+    onLoadRef.current = onLoad
+  })
 
   useEffect(() => {
     let cancelled = false
     requestJson<HeadToHead>(`/api/predictions/${predictionId}/head-to-head`)
-      .then((result) => !cancelled && setData(result))
+      .then((result) => {
+        if (cancelled) return
+        setData(result)
+        onLoadRef.current?.(result)
+      })
       .catch((err: Error) => !cancelled && setError(err.message))
     return () => {
       cancelled = true

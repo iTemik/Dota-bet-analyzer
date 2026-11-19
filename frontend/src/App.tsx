@@ -10,6 +10,7 @@ import InsightsTable, { type PlayerRanks } from './components/InsightsTable'
 import PredictionDetail from './components/PredictionDetail'
 import PredictionList from './components/PredictionList'
 import PredictionPanel from './components/PredictionPanel'
+import ScorePanel from './components/ScorePanel'
 import TeamAutocomplete from './components/TeamAutocomplete'
 import { requestJson } from './api'
 import { loadMetaParams } from './meta'
@@ -357,6 +358,8 @@ function App() {
                 <InsightsTable teams={teams} ranks={teams.map(getPlayerRanks)} metas={results.map((r) => r?.meta)} />
               </div>
             </div>
+
+            <ScorePanel teams={teams} summaries={summaries} metas={results.map((r) => r?.meta)} />
 
             <PredictionPanel
               key={teams.map((team) => team?.task_id).join()}
