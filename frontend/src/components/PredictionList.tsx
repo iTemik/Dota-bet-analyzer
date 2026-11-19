@@ -1,13 +1,13 @@
 import { useEffect, useState } from 'react'
 import { formatShortDateTime } from '../format'
 import { requestJson } from '../api'
+import { machinePrediction, favouredTeam } from '../machine'
 import { betTotals, isSettled, outcome, teamLabel } from '../predictions'
-import type { Prediction } from '../types'
+import { loadScoreSettings } from '../scoreRules'
+import type { Prediction, PredictionDetail } from '../types'
 import { bestOfLabel, scoreLabel, usePage } from '../series'
 import { Pager, TeamCells } from './seriesTable'
 import BetOutcome, { Loss, Profit, SIMULATION_NOTE } from './BetOutcome'
-import CalibrationPanel from './CalibrationPanel'
-import Collapsible from './Collapsible'
 
 type Filter = 'all' | 'pending' | 'settled'
 
@@ -17,6 +17,10 @@ const FILTERS: { id: Filter; label: string }[] = [
   { id: 'settled', label: 'Settled' },
 ]
 
+type Favoured = Map<number, 1 | 2 | null> // prediction id -> team our score favours
+
+const hasBet = (p: Prediction): boolean => p.bet_team !== null && p.stake !== null
+
 const betText = (p: Prediction): string => {
   if (p.bet_team === null) return 'No bet'
   const team = teamLabel(p.bet_team === 1 ? p.team1 : p.team2, p.bet_team - 1)
@@ -24,7 +28,7 @@ const betText = (p: Prediction): string => {
 }
 
 /** Predictions, laid out like the Finished Matches table (time, Bo, teams, score), then odds, bet and outcome. */
-function PredictionTable({ predictions }: { predictions: Prediction[] }) {
+function PredictionTable({ predictions, favoured }: { predictions: Prediction[]; favoured: Favoured | null }) {
   const { page, pages, shown, setPage } = usePage(predictions)
 
   return (
@@ -40,11 +44,15 @@ function PredictionTable({ predictions }: { predictions: Prediction[] }) {
             <th>Odds</th>
             <th>Bet</th>
             <th>Outcome</th>
+            <th>Machine</th>
           </tr>
         </thead>
         <tbody>
           {shown.map((p) => {
             const result = outcome(p)
+            const machine = favoured?.has(p.prediction_id)
+              ? machinePrediction(p, favoured.get(p.prediction_id) ?? null)
+              : null
             return (
               <tr
                 key={p.prediction_id}
@@ -65,6 +73,14 @@ function PredictionTable({ predictions }: { predictions: Prediction[] }) {
                 <td className={`outcome outcome-${result}`}>
                   <BetOutcome prediction={p} />
                 </td>
+                {machine ? (
+                  <td className={`outcome outcome-${outcome(machine)}`}>
+                    {machine.bet_team !== null && `${betText(machine)}: `}
+                    <BetOutcome prediction={machine} />
+                  </td>
+                ) : (
+                  <td>{hasBet(p) ? '...' : 'No bet'}</td>
+                )}
               </tr>
             )
           })}
@@ -75,11 +91,64 @@ function PredictionTable({ predictions }: { predictions: Prediction[] }) {
   )
 }
 
-/** Predictions tab: every saved prediction, newest first, with a pending/settled filter and totals. */
+/** Totals line: bets with net result, won, lost and pending amounts. */
+function Totals({ label, predictions, note }: { label: string; predictions: Prediction[]; note?: boolean }) {
+  const outcomes = predictions.map(outcome)
+  const count = (o: string) => outcomes.filter((x) => x === o).length
+  const totals = betTotals(predictions)
+  return (
+    <p className="prediction-totals">
+      {label}: Bets: {predictions.length - count('no_bet')} (
+      {totals.net < 0 ? <Loss value={-totals.net} /> : <Profit value={totals.net} />}) · Won: {count('won')} (
+      <Profit value={totals.won} />) · Lost: {count('lost')} (<Loss value={totals.lost} />) · Pending:{' '}
+      {count('pending')} (<Profit value={totals.pendingProfit} />/<Loss value={totals.pendingLoss} />)
+      {note && (
+        <>
+          {' '}
+          <span className="simulation-badge">{SIMULATION_NOTE}</span>
+        </>
+      )}
+    </p>
+  )
+}
+
+/**
+ * Favoured team of every prediction with a bet, from its snapshots (one GET /api/predictions/{id} each) and the
+ * current score weights; null while loading.
+ */
+function useFavoured(predictions: Prediction[] | null) {
+  const [favoured, setFavoured] = useState<Favoured | null>(null)
+  const [error, setError] = useState<string | null>(null)
+  const idsKey = predictions ? predictions.filter(hasBet).map((p) => p.prediction_id).join() : null
+
+  useEffect(() => {
+    if (idsKey === null) return
+    let cancelled = false
+    const settings = loadScoreSettings()
+    const ids = idsKey ? idsKey.split(',').map(Number) : []
+    Promise.all(ids.map((id) => requestJson<PredictionDetail>(`/api/predictions/${id}`)))
+      .then((details) => {
+        if (cancelled) return
+        setFavoured(new Map(details.map((d) => [d.prediction_id, favouredTeam(d, settings)])))
+      })
+      .catch((err: Error) => !cancelled && setError(err.message))
+    return () => {
+      cancelled = true
+    }
+  }, [idsKey])
+
+  return { favoured, error }
+}
+
+/**
+ * Predictions tab: every saved prediction, newest first, with a pending/settled filter and totals, next to the
+ * machine's bets (the same stake on the team our score favours).
+ */
 function PredictionList() {
   const [predictions, setPredictions] = useState<Prediction[] | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [filter, setFilter] = useState<Filter>('all')
+  const { favoured, error: machineError } = useFavoured(predictions)
 
   useEffect(() => {
     let cancelled = false
@@ -95,9 +164,7 @@ function PredictionList() {
   if (!predictions) return <p>Loading predictions...</p>
 
   const filtered = predictions.filter((p) => filter === 'all' || (filter === 'settled') === isSettled(p))
-  const outcomes = filtered.map(outcome)
-  const count = (o: string) => outcomes.filter((x) => x === o).length
-  const totals = betTotals(filtered)
+  const machine = favoured && filtered.map((p) => machinePrediction(p, favoured.get(p.prediction_id) ?? null))
 
   return (
     <section className="prediction-list">
@@ -115,25 +182,22 @@ function PredictionList() {
             </button>
           ))}
         </div>
-        <p className="prediction-totals">
-          Bets: {filtered.length - count('no_bet')} (
-          {totals.net < 0 ? <Loss value={-totals.net} /> : <Profit value={totals.net} />}) · Won: {count('won')} (
-          <Profit value={totals.won} />) · Lost: {count('lost')} (<Loss value={totals.lost} />) · Pending:{' '}
-          {count('pending')} (<Profit value={totals.pendingProfit} />/<Loss value={totals.pendingLoss} />){' '}
-          <span className="simulation-badge">{SIMULATION_NOTE}</span>
-        </p>
+        <div>
+          <Totals label="You" predictions={filtered} note />
+          {machine ? (
+            <Totals label="Machine (Team Score favourite)" predictions={machine} />
+          ) : (
+            <p className="prediction-totals">
+              Machine (Team Score favourite): {machineError ? `failed to load: ${machineError}` : 'loading...'}
+            </p>
+          )}
+        </div>
       </div>
 
       {filtered.length === 0 ? (
         <p>{predictions.length ? 'No predictions match this filter.' : 'No predictions yet. Log one on the Compare tab.'}</p>
       ) : (
-        <PredictionTable key={filter} predictions={filtered} />
-      )}
-
-      {predictions.some(isSettled) && (
-        <Collapsible lazy title="Score calibration">
-          <CalibrationPanel predictions={predictions} />
-        </Collapsible>
+        <PredictionTable key={filter} predictions={filtered} favoured={favoured} />
       )}
     </section>
   )
