@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { favouredTeam, machinePrediction } from './machine'
+import { favouredTeam, recommendedPrediction } from './recommended'
 import { prediction, predictionDetail, snapshot } from './test/predictionFixtures'
 
 const form = (win_percentage: number) => ({ days: 20, matches: 10, wins: 0, losses: 0, win_percentage, last_match_time: null })
@@ -21,21 +21,21 @@ describe('favouredTeam', () => {
   })
 })
 
-describe('machinePrediction', () => {
+describe('recommendedPrediction', () => {
   it("bets the user's stake on the favoured team at its odds", () => {
-    const machine = machinePrediction(prediction({ bet_team: 1, stake: 50, team1_maps_won: 2, team2_maps_won: 1 }), 2)
+    const machine = recommendedPrediction(prediction({ bet_team: 1, stake: 50, team1_maps_won: 2, team2_maps_won: 1 }), 2)
     expect(machine).toMatchObject({ bet_team: 2, stake: 50, bet_won: false, team2_odds: 2.05 })
-    expect(machinePrediction(prediction({ bet_team: 2, team1_maps_won: 0, team2_maps_won: 2 }), 2).bet_won).toBe(true)
+    expect(recommendedPrediction(prediction({ bet_team: 2, team1_maps_won: 0, team2_maps_won: 2 }), 2).bet_won).toBe(true)
   })
 
   it('is pending before the result and loses a Bo2 draw', () => {
-    expect(machinePrediction(prediction(), 1).bet_won).toBeNull()
+    expect(recommendedPrediction(prediction(), 1).bet_won).toBeNull()
     const draw = prediction({ best_of: 2, team1_maps_won: 1, team2_maps_won: 1 })
-    expect(machinePrediction(draw, 1).bet_won).toBe(false)
+    expect(recommendedPrediction(draw, 1).bet_won).toBe(false)
   })
 
   it('makes no bet when the user made none or the score is even', () => {
-    expect(machinePrediction(prediction({ bet_team: null, stake: null }), 1)).toMatchObject({ bet_team: null, stake: null })
-    expect(machinePrediction(prediction(), null)).toMatchObject({ bet_team: null, stake: null, bet_won: null })
+    expect(recommendedPrediction(prediction({ bet_team: null, stake: null }), 1)).toMatchObject({ bet_team: null, stake: null })
+    expect(recommendedPrediction(prediction(), null)).toMatchObject({ bet_team: null, stake: null, bet_won: null })
   })
 })

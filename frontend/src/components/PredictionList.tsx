@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { formatShortDateTime } from '../format'
 import { requestJson } from '../api'
-import { machinePrediction, favouredTeam } from '../machine'
+import { RECOMMENDED_NOTE, favouredTeam, recommendedPrediction } from '../recommended'
 import { betTotals, isSettled, outcome, teamLabel } from '../predictions'
 import { loadScoreSettings } from '../scoreRules'
 import type { Prediction, PredictionDetail } from '../types'
@@ -20,6 +20,22 @@ const FILTERS: { id: Filter; label: string }[] = [
 type Favoured = Map<number, 1 | 2 | null> // prediction id -> team our score favours
 
 const hasBet = (p: Prediction): boolean => p.bet_team !== null && p.stake !== null
+
+const RECOMMENDED = 'Recommended bet'
+
+/** Short tag after the user's bet: green when the bet team is the one our score favours, red when it is not. */
+function FavourTag({ prediction, team }: { prediction: Prediction; team: 1 | 2 | null | undefined }) {
+  if (prediction.bet_team === null || !team) return null
+  const favoured = prediction.bet_team === team
+  return (
+    <span
+      className={`favour-tag ${favoured ? 'favour-tag-yes' : 'favour-tag-no'}`}
+      title={favoured ? 'Bet on the team our score favours' : 'Bet against the team our score favours'}
+    >
+      {favoured ? 'Fav' : 'Not fav'}
+    </span>
+  )
+}
 
 const betText = (p: Prediction): string => {
   if (p.bet_team === null) return 'No bet'
@@ -44,15 +60,14 @@ function PredictionTable({ predictions, favoured }: { predictions: Prediction[];
             <th>Odds</th>
             <th>Bet</th>
             <th>Outcome</th>
-            <th>Machine</th>
+            <th>{RECOMMENDED}</th>
           </tr>
         </thead>
         <tbody>
           {shown.map((p) => {
             const result = outcome(p)
-            const machine = favoured?.has(p.prediction_id)
-              ? machinePrediction(p, favoured.get(p.prediction_id) ?? null)
-              : null
+            const team = favoured?.get(p.prediction_id)
+            const recommended = favoured?.has(p.prediction_id) ? recommendedPrediction(p, team ?? null) : null
             return (
               <tr
                 key={p.prediction_id}
@@ -69,14 +84,16 @@ function PredictionTable({ predictions, favoured }: { predictions: Prediction[];
                 <td>
                   {p.team1_odds} / {p.team2_odds}
                 </td>
-                <td>{betText(p)}</td>
+                <td>
+                  {betText(p)}
+                  <FavourTag prediction={p} team={team} />
+                </td>
                 <td className={`outcome outcome-${result}`}>
                   <BetOutcome prediction={p} />
                 </td>
-                {machine ? (
-                  <td className={`outcome outcome-${outcome(machine)}`}>
-                    {machine.bet_team !== null && `${betText(machine)}: `}
-                    <BetOutcome prediction={machine} />
+                {recommended ? (
+                  <td className={`outcome outcome-${outcome(recommended)}`}>
+                    <BetOutcome prediction={recommended} />
                   </td>
                 ) : (
                   <td>{hasBet(p) ? '...' : 'No bet'}</td>
@@ -142,13 +159,13 @@ function useFavoured(predictions: Prediction[] | null) {
 
 /**
  * Predictions tab: every saved prediction, newest first, with a pending/settled filter and totals, next to the
- * machine's bets (the same stake on the team our score favours).
+ * recommended bets (the same stake on the team our score favours).
  */
 function PredictionList() {
   const [predictions, setPredictions] = useState<Prediction[] | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [filter, setFilter] = useState<Filter>('all')
-  const { favoured, error: machineError } = useFavoured(predictions)
+  const { favoured, error: recommendedError } = useFavoured(predictions)
 
   useEffect(() => {
     let cancelled = false
@@ -164,7 +181,7 @@ function PredictionList() {
   if (!predictions) return <p>Loading predictions...</p>
 
   const filtered = predictions.filter((p) => filter === 'all' || (filter === 'settled') === isSettled(p))
-  const machine = favoured && filtered.map((p) => machinePrediction(p, favoured.get(p.prediction_id) ?? null))
+  const recommended = favoured && filtered.map((p) => recommendedPrediction(p, favoured.get(p.prediction_id) ?? null))
 
   return (
     <section className="prediction-list">
@@ -184,11 +201,11 @@ function PredictionList() {
         </div>
         <div>
           <Totals label="You" predictions={filtered} note />
-          {machine ? (
-            <Totals label="Machine (Team Score favourite)" predictions={machine} />
+          {recommended ? (
+            <Totals label={RECOMMENDED} predictions={recommended} />
           ) : (
             <p className="prediction-totals">
-              Machine (Team Score favourite): {machineError ? `failed to load: ${machineError}` : 'loading...'}
+              {RECOMMENDED}: {recommendedError ? `failed to load: ${recommendedError}` : 'loading...'}
             </p>
           )}
         </div>
@@ -197,7 +214,10 @@ function PredictionList() {
       {filtered.length === 0 ? (
         <p>{predictions.length ? 'No predictions match this filter.' : 'No predictions yet. Log one on the Compare tab.'}</p>
       ) : (
-        <PredictionTable key={filter} predictions={filtered} favoured={favoured} />
+        <>
+          <p className="prediction-hint">{RECOMMENDED_NOTE}</p>
+          <PredictionTable key={filter} predictions={filtered} favoured={favoured} />
+        </>
       )}
     </section>
   )

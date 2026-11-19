@@ -2,6 +2,7 @@ import { render, screen, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { prediction, predictionDetail, snapshot } from '../test/predictionFixtures'
+import { RECOMMENDED_NOTE } from '../recommended'
 import PredictionList from './PredictionList'
 
 const jsonResponse = (data: unknown, ok = true, status = ok ? 200 : 500) =>
@@ -19,6 +20,7 @@ const form = (win_percentage: number) => ({ days: 20, matches: 10, wins: 0, loss
 const detail = (id: number) =>
   predictionDetail({
     ...predictions.find((p) => p.prediction_id === id),
+    prediction_id: id,
     team1_snapshot: snapshot(7, { team: 'Team A', team_id: 1, rating_change: -10, league_form: form(50) }),
     team2_snapshot: snapshot(8, { team: 'Team B', team_id: 2, rating_change: 40, league_form: form(80) }),
   })
@@ -43,7 +45,7 @@ describe('PredictionList', () => {
   it('lists the predictions like the Finished Matches table, then odds, bet and outcome', async () => {
     const fetchMock = mockList()
     render(<PredictionList />)
-    await screen.findByText(/^Machine \(Team Score favourite\): Bets/)
+    await screen.findByText(/^Recommended bet: Bets/)
     expect(fetchMock).toHaveBeenCalledWith('/api/predictions', undefined)
     expect(rows()).toHaveLength(3)
 
@@ -51,10 +53,10 @@ describe('PredictionList', () => {
     expect(pending.getByRole('link')).toHaveAttribute('href', '#predictions/3')
     expect(pending.getByRole('link').textContent).toMatch(/^[A-Z][a-z]{2} \d+/)
     const cells = pending.getAllByRole('cell').map((c) => c.textContent)
-    expect(cells.slice(1)).toEqual(['Bo3', '', 'Team A', '', 'Team B', '-', '1.85 / 2.05', 'Team A · 100', 'Pending +85 / -100',
-      'Team B · 100: Pending +105 / -100'])
+    expect(cells.slice(1)).toEqual(['Bo3', '', 'Team A', '', 'Team B', '-', '1.85 / 2.05', 'Team A · 100Not fav', 'Pending +85 / -100',
+      'Pending +105 / -100'])
 
-    expect(within(rows()[1]).getAllByText('No bet')).toHaveLength(3) // bet, outcome, machine
+    expect(within(rows()[1]).getAllByText('No bet')).toHaveLength(3) // bet, outcome, recommended bet
     expect(within(rows()[1]).getByText('1:2')).toBeInTheDocument()
     expect(pending.getByText('+85')).toHaveClass('money-profit')
     expect(pending.getAllByText('-100')[0]).toHaveClass('money-loss')
@@ -113,29 +115,39 @@ describe('PredictionList', () => {
     expect(screen.getByText('Page 1 of 2')).toBeInTheDocument()
   })
 
-  it("shows the machine's bets: the user's stake on the team our score favours", async () => {
+  it("shows the recommended bets: the user's stake on the team our score favours", async () => {
     const fetchMock = mockList()
     render(<PredictionList />)
-    await screen.findByText(/^Machine \(Team Score favourite\): Bets/)
+    await screen.findByText(/^Recommended bet: Bets/)
     // details only for the predictions with a bet
     expect(fetchMock.mock.calls.map(([url]) => url)).toEqual(['/api/predictions', '/api/predictions/3', '/api/predictions/1'])
-    const machine = (row: number) => within(rows()[row]).getAllByRole('cell').at(-1)
-    expect(machine(1)).toHaveTextContent('No bet')
-    expect(machine(2)).toHaveTextContent('Team B · 100: Lost -100')
-    expect(machine(2)).toHaveClass('outcome-lost')
+    expect(screen.getByText(RECOMMENDED_NOTE)).toBeInTheDocument()
+    expect(screen.getByRole('columnheader', { name: 'Recommended bet' })).toBeInTheDocument()
+    const recommended = (row: number) => within(rows()[row]).getAllByRole('cell').at(-1)
+    expect(recommended(1)).toHaveTextContent('No bet')
+    expect(recommended(2)).toHaveTextContent('Lost -100')
+    expect(recommended(2)).toHaveClass('outcome-lost')
+    // the user bet on team 1, our score favours team 2
+    expect(within(rows()[2]).getByText('Not fav')).toHaveClass('favour-tag', 'favour-tag-no')
     const totals = document.querySelectorAll<HTMLElement>('.prediction-totals')
     expect(totals[0]).toHaveTextContent(/^You: Bets: 2 \(\+85\)/)
     expect(totals[1]).toHaveTextContent(
-      'Machine (Team Score favourite): Bets: 2 (-100) · Won: 0 (0) · Lost: 1 (-100) · Pending: 1 (+105/-100)',
+      'Recommended bet: Bets: 2 (-100) · Won: 0 (0) · Lost: 1 (-100) · Pending: 1 (+105/-100)',
     )
   })
 
-  it('says when the machine bets fail to load', async () => {
+  it('tags a bet on the favoured team green', async () => {
+    mockList(jsonResponse([prediction({ prediction_id: 4, bet_team: 2 })]))
+    render(<PredictionList />)
+    expect(await screen.findByText('Fav')).toHaveClass('favour-tag', 'favour-tag-yes')
+  })
+
+  it('says when the recommended bets fail to load', async () => {
     globalThis.fetch = vi.fn((url: string) =>
       url === '/api/predictions' ? jsonResponse(predictions) : jsonResponse({ message: 'Boom' }, false),
     ) as unknown as typeof fetch
     render(<PredictionList />)
-    expect(await screen.findByText('Machine (Team Score favourite): failed to load: Boom')).toBeInTheDocument()
+    expect(await screen.findByText('Recommended bet: failed to load: Boom')).toBeInTheDocument()
     expect(within(rows()[0]).getAllByRole('cell').at(-1)).toHaveTextContent('...')
   })
 
