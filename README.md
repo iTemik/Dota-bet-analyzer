@@ -592,7 +592,7 @@ The backend provides REST API endpoints for team statistics, match data, and pla
   "Better" (green) / "Worse" (red) tag; the same tags and scores mark the teams in Log prediction's "Bet on"
 - Each rule lives in its table row (`score`), so a new scored row joins the score by itself; recalculated every time,
   no DB change
-- "Score weights" editor in the panel: every row of the scored tables in table order (unscored rows shown as "Not
+- "Score weights" tab (`#weights`, after Meta; the panel links to it): every row of the scored tables in table order (unscored rows shown as "Not
   scored"), weight word per tier and limits per rule, points per word and the confidence knob; changes apply at once,
   are kept in the browser, and reset per rule or all
 - Bookmaker rows once odds are known (typed or from "Get odds from Pari" on Compare, the saved odds on a prediction):

@@ -1,7 +1,7 @@
-import { fireEvent, render, screen, within } from '@testing-library/react'
+import { act, render, screen, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { beforeEach, describe, expect, it } from 'vitest'
-import { SCORE_SETTINGS_KEY } from '../scoreRules'
+import { SCORE_SETTINGS_KEY, saveScoreSettings } from '../scoreRules'
 import type { LeagueForm, TeamData } from '../types'
 import ScorePanel from './ScorePanel'
 
@@ -74,15 +74,14 @@ describe('ScorePanel', () => {
     expect(screen.getByText(/Data for \d+% of the weight: low confidence\./)).toBeInTheDocument()
   })
 
-  it('recalculates with the weights editor and keeps the change in the browser', () => {
+  it('recalculates at once when the weights change (Score weights tab) and links to that tab', () => {
     render(<ScorePanel teams={[team('Alpha', 40, 80), team('Beta', -10, 50)]} summaries={[null, null]} />)
-    fireEvent.click(screen.getByText('Score weights'))
+    expect(screen.getByRole('link', { name: 'Score weights' })).toHaveAttribute('href', '#weights')
     // rating change 50 / 64 x 2 = 1.6 instead of 6.3
-    fireEvent.change(screen.getByRole('combobox', { name: 'Rating change: Weight' }), { target: { value: 'low' } })
+    act(() => saveScoreSettings({ rules: { rating_change: { levels: { base: 'low' } } } }))
     expect(rowCells('Rating change')).toEqual(['Rating change', '+1.6', ''])
     expect(screen.getByText('Alpha: slight favourite · score +9.6')).toBeInTheDocument()
-    expect(screen.getByText('Score weights (changed)')).toBeInTheDocument()
-    expect(JSON.parse(localStorage.getItem(SCORE_SETTINGS_KEY) ?? '{}')).toEqual({ rules: { rating_change: { levels: { base: 'low' } } } })
+    expect(screen.getByText(/^Weights \(changed\):/)).toBeInTheDocument()
   })
 
   it('starts from the weights saved in the browser', () => {

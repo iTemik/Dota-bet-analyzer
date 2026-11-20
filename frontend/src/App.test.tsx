@@ -1247,7 +1247,16 @@ describe('App Component', () => {
         it('shows the Meta tab after Predictions', () => {
             render(<App />)
             const tabs = within(screen.getByRole('navigation')).getAllByRole('link')
-            expect(tabs.map((t) => t.textContent)).toEqual(['Compare', 'Predictions', 'Meta'])
+            expect(tabs.map((t) => t.textContent)).toEqual(['Compare', 'Predictions', 'Meta', 'Score weights'])
+        })
+
+        it('opens the Score weights editor on its own tab', async () => {
+            render(<App />)
+            await userEvent.click(screen.getByRole('link', { name: 'Score weights' }))
+            await waitFor(() => expect(window.location.hash).toBe('#weights'))
+            expect(screen.getByRole('heading', { name: 'Score weights' })).toBeVisible()
+            expect(screen.getByRole('combobox', { name: 'Rating change: Weight' })).toBeVisible()
+            expect(screen.getByPlaceholderText(/Enter first team name/i)).not.toBeVisible()
         })
 
         it('switches to the Meta tab and loads the meta heroes', async () => {
