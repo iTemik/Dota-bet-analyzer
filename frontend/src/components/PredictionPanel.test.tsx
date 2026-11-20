@@ -86,12 +86,13 @@ describe('PredictionPanel', () => {
     expect(onLineChange).toHaveBeenLastCalledWith({ odds: null, bestOf: null })
   })
 
-  it('tags the bet options Better / Worse by our score', () => {
-    render(<PredictionPanel teams={teams} results={results} days={20} favoured={2} />)
+  it('tags the bet options Better / Worse with each team\'s score', () => {
+    render(<PredictionPanel teams={teams} results={results} days={20} score={-7.94} />)
     const options = within(screen.getByRole('radiogroup', { name: 'Bet on' }))
     expect(options.getByText('Better')).toHaveClass('favour-tag-yes')
     expect(options.getByText('Worse')).toHaveClass('favour-tag-no')
-    expect(options.getByText('Better').closest('label')).toHaveTextContent(/Better$/)
+    expect(options.getByText('Better').closest('label')).toHaveTextContent(/Better\+7\.9$/)
+    expect(options.getByText('Worse').closest('label')).toHaveTextContent(/Worse-7\.9$/)
     expect(options.getByRole('radio', { name: /Better/ })).toHaveAttribute('value', '2')
   })
 

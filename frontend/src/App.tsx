@@ -272,7 +272,6 @@ function App() {
         scoreSettings,
       ).score
     : 0
-  const favoured = score > 0 ? 1 : score < 0 ? 2 : null
 
   return (
     <div className="container">
@@ -397,7 +396,7 @@ function App() {
               results={results}
               days={STATS_DAYS}
               onLineChange={setLine}
-              favoured={favoured}
+              score={score}
             />
           </div>
         )}

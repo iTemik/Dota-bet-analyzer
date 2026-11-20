@@ -589,7 +589,7 @@ The backend provides REST API endpoints for team statistics, match data, and pla
   n/a show the map chance), favour label (even, slight, clear, strong favourite at 55/62/72%), and each rule's points
   as a bar in the favoured team's column; the "Team Score" section is closed until clicked
 - The score also sits under the team names at the top of Team Comparison, the favoured team's cell highlighted, with a
-  "Better" (green) / "Worse" (red) tag; the same tags mark the teams in Log prediction's "Bet on"
+  "Better" (green) / "Worse" (red) tag; the same tags and scores mark the teams in Log prediction's "Bet on"
 - Each rule lives in its table row (`score`), so a new scored row joins the score by itself; recalculated every time,
   no DB change
 - "Score weights" editor in the panel: every row of the scored tables in table order (unscored rows shown as "Not
