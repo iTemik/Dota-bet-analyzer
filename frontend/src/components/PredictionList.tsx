@@ -1,9 +1,10 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { formatShortDateTime } from '../format'
 import { requestJson } from '../api'
-import { RECOMMENDED_NOTE, favouredTeam, recommendedPrediction } from '../recommended'
+import { RECOMMENDED_NOTE, favouredBy, recommendedPrediction, snapshotScore } from '../recommended'
 import { betTotals, isSettled, outcome, teamLabel } from '../predictions'
-import { loadScoreSettings } from '../scoreRules'
+import { useScoreSettings } from '../scoreRules'
+import { formatSigned } from '../format'
 import type { Prediction, PredictionDetail } from '../types'
 import { bestOfLabel, scoreLabel, usePage } from '../series'
 import { Pager, TeamCells } from './seriesTable'
@@ -18,7 +19,7 @@ const FILTERS: { id: Filter; label: string }[] = [
   { id: 'settled', label: 'Settled' },
 ]
 
-type Favoured = Map<number, 1 | 2 | null> // prediction id -> team our score favours
+type Scores = Map<number, number> // prediction id -> team score from its snapshots (positive = team 1 favoured)
 
 const hasBet = (p: Prediction): boolean => p.bet_team !== null && p.stake !== null
 
@@ -31,7 +32,7 @@ const betText = (p: Prediction): string => {
 }
 
 /** Predictions, laid out like the Finished Matches table (time, Bo, teams, score), then odds, bet and outcome. */
-function PredictionTable({ predictions, favoured }: { predictions: Prediction[]; favoured: Favoured | null }) {
+function PredictionTable({ predictions, scores }: { predictions: Prediction[]; scores: Scores | null }) {
   const { page, pages, shown, setPage } = usePage(predictions)
 
   return (
@@ -53,8 +54,9 @@ function PredictionTable({ predictions, favoured }: { predictions: Prediction[];
         <tbody>
           {shown.map((p) => {
             const result = outcome(p)
-            const team = favoured?.get(p.prediction_id)
-            const recommended = favoured?.has(p.prediction_id) ? recommendedPrediction(p, team ?? null) : null
+            const score = scores?.get(p.prediction_id)
+            const team = score === undefined ? undefined : favouredBy(score)
+            const recommended = score === undefined ? null : recommendedPrediction(p, team ?? null)
             return (
               <tr
                 key={p.prediction_id}
@@ -73,7 +75,12 @@ function PredictionTable({ predictions, favoured }: { predictions: Prediction[];
                 </td>
                 <td>
                   {betText(p)}
-                  {p.bet_team !== null && team && <FavourTag favoured={p.bet_team === team} />}
+                  {p.bet_team !== null && score !== undefined && (
+                    <>
+                      {team && <FavourTag favoured={p.bet_team === team} />}
+                      <span className="team-score">{formatSigned(p.bet_team === 1 ? score : -score)}</span>
+                    </>
+                  )}
                 </td>
                 <td className={`outcome outcome-${result}`}>
                   <BetOutcome prediction={p} />
@@ -117,23 +124,23 @@ function Totals({ label, predictions, note }: { label: string; predictions: Pred
 }
 
 /**
- * Favoured team of every prediction with a bet, from its snapshots (one GET /api/predictions/{id} each) and the
- * current score weights; null while loading.
+ * Team score of every prediction with a bet, from its snapshots (one GET /api/predictions/{id} each) and the current
+ * score weights (a weights change recalculates it); null while loading.
  */
-function useFavoured(predictions: Prediction[] | null) {
-  const [favoured, setFavoured] = useState<Favoured | null>(null)
+function useScores(predictions: Prediction[] | null): { scores: Scores | null; error: string | null } {
+  const [details, setDetails] = useState<PredictionDetail[] | null>(null)
+  const [settings] = useScoreSettings()
   const [error, setError] = useState<string | null>(null)
   const idsKey = predictions ? predictions.filter(hasBet).map((p) => p.prediction_id).join() : null
 
   useEffect(() => {
     if (idsKey === null) return
     let cancelled = false
-    const settings = loadScoreSettings()
     const ids = idsKey ? idsKey.split(',').map(Number) : []
     Promise.all(ids.map((id) => requestJson<PredictionDetail>(`/api/predictions/${id}`)))
       .then((details) => {
         if (cancelled) return
-        setFavoured(new Map(details.map((d) => [d.prediction_id, favouredTeam(d, settings)])))
+        setDetails(details)
       })
       .catch((err: Error) => !cancelled && setError(err.message))
     return () => {
@@ -141,7 +148,11 @@ function useFavoured(predictions: Prediction[] | null) {
     }
   }, [idsKey])
 
-  return { favoured, error }
+  const scores = useMemo(
+    () => details && new Map(details.map((d) => [d.prediction_id, snapshotScore(d, settings)])),
+    [details, settings],
+  )
+  return { scores, error }
 }
 
 /**
@@ -152,7 +163,7 @@ function PredictionList() {
   const [predictions, setPredictions] = useState<Prediction[] | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [filter, setFilter] = useState<Filter>('all')
-  const { favoured, error: recommendedError } = useFavoured(predictions)
+  const { scores, error: recommendedError } = useScores(predictions)
 
   useEffect(() => {
     let cancelled = false
@@ -168,7 +179,8 @@ function PredictionList() {
   if (!predictions) return <p>Loading predictions...</p>
 
   const filtered = predictions.filter((p) => filter === 'all' || (filter === 'settled') === isSettled(p))
-  const recommended = favoured && filtered.map((p) => recommendedPrediction(p, favoured.get(p.prediction_id) ?? null))
+  const recommended =
+    scores && filtered.map((p) => recommendedPrediction(p, favouredBy(scores.get(p.prediction_id) ?? 0)))
 
   return (
     <section className="prediction-list">
@@ -203,7 +215,7 @@ function PredictionList() {
       ) : (
         <>
           <p className="prediction-hint">{RECOMMENDED_NOTE}</p>
-          <PredictionTable key={filter} predictions={filtered} favoured={favoured} />
+          <PredictionTable key={filter} predictions={filtered} scores={scores} />
         </>
       )}
     </section>

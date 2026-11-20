@@ -53,7 +53,7 @@ describe('PredictionList', () => {
     expect(pending.getByRole('link')).toHaveAttribute('href', '#predictions/3')
     expect(pending.getByRole('link').textContent).toMatch(/^[A-Z][a-z]{2} \d+/)
     const cells = pending.getAllByRole('cell').map((c) => c.textContent)
-    expect(cells.slice(1)).toEqual(['Bo3', '', 'Team A', '', 'Team B', '-', '1.85 / 2.05', 'Team A · 100Worse', 'Pending +85 / -100',
+    expect(cells.slice(1)).toEqual(['Bo3', '', 'Team A', '', 'Team B', '-', '1.85 / 2.05', 'Team A · 100Worse-14.3', 'Pending +85 / -100',
       'Pending +105 / -100'])
 
     expect(within(rows()[1]).getAllByText('No bet')).toHaveLength(3) // bet, outcome, recommended bet

@@ -221,6 +221,14 @@ class TestGetSnapshot:
         assert data["team_name"] == "Team 101"
         assert set(data["data"]) == {"team", "summary", "players"}
 
+    def test_stores_team_meta_when_given(self, client):
+        meta = {"state": "actively", "pool_state": "normal", "sample": {"games": 15, "heroes": 35}}
+        snapshot_id = post_snapshot(client, {**snapshot_body(), "meta": meta}).get_json()["snapshot_id"]
+
+        data = client.get(f"/api/snapshots/{snapshot_id}").get_json()["data"]
+
+        assert data["meta"] == meta
+
     def test_unknown_id_returns_404(self, client):
         response = client.get("/api/snapshots/12345")
 

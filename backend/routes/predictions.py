@@ -59,7 +59,7 @@ def create_snapshot(args) -> tuple[Response, int]:
         return api_error(422, Errors.TEAM_ID_MISMATCH, team_id=team_id, team_team_id=args["team"].get("team_id"))
     try:
         snapshot, created = save_snapshot(
-            team_id, args["days"], args["team"], args["summary"], args["players"], full_version()
+            team_id, args["days"], args["team"], args["summary"], args["players"], full_version(), args["meta"]
         )
         return jsonify(snapshot), 201 if created else 200
     except Exception as e:

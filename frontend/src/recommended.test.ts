@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { favouredTeam, recommendedPrediction } from './recommended'
+import { favouredTeam, recommendedPrediction, snapshotScore } from './recommended'
 import { prediction, predictionDetail, snapshot } from './test/predictionFixtures'
 
 const form = (win_percentage: number) => ({ days: 20, matches: 10, wins: 0, losses: 0, win_percentage, last_match_time: null })
@@ -18,6 +18,18 @@ describe('favouredTeam', () => {
   it('uses the weights editor settings and gives null for an even score', () => {
     const none = { levels: { base: 'none' as const, extreme: 'none' as const } }
     expect(favouredTeam(detail, { rules: { rating_change: none, tournament_win_pct: none } })).toBeNull()
+  })
+})
+
+describe('snapshotScore', () => {
+  it('scores the hero pool from the team meta saved in the snapshots, like Compare', () => {
+    const pool = (heroes: number) => ({ pool_state: 'normal', sample: { games: 15, heroes } }) as never
+    const base = snapshotScore(detail)
+    const withMeta = predictionDetail({
+      team1_snapshot: { ...detail.team1_snapshot, data: { ...detail.team1_snapshot.data, meta: pool(40) } },
+      team2_snapshot: { ...detail.team2_snapshot, data: { ...detail.team2_snapshot.data, meta: pool(30) } },
+    })
+    expect(snapshotScore(withMeta) - base).toBeCloseTo(2) // hero pool 10 heroes more: full edge x low (2)
   })
 })
 

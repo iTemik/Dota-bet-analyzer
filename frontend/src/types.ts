@@ -179,6 +179,7 @@ export interface SnapshotData {
     rank: number | null
     match_count: number | null
   }[]
+  meta?: TeamMeta | null // team meta (hero pool, meta state); snapshots saved before it was added lack it
 }
 
 // GET /api/predictions/{id}: team1_snapshot and team2_snapshot
