@@ -37,7 +37,7 @@ Module map, request/queue rules, caches, recipes: @codebase-map.md
 
 ## Change Rules
 - UI change → add/update vitest tests in same PR; if tests would be large, ask user before skipping
-- New feature → add to README Core Features
+- New feature → add to docs/features.md Core Features
 - DB: minimize new tables/columns; add only fields read by current code, extend later via migration
 - OpenDota: minimize requests; cache frequent/immutable responses (SQLite for finished matches, Redis TTL for volatile data)
 - HTTP: only `backend/opendota.py`, `backend/matches.py` and `backend/bookmakers.py` import `requests`; tests mock every request (enforced by `tests/test_network_guard.py`)
