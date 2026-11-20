@@ -627,6 +627,11 @@ class SnapshotCreateSchema(Schema):
         load_default=list,
         metadata={"description": "Per player rank and match count from GET /api/results/{task_id} results[]"},
     )
+    meta = fields.Dict(
+        allow_none=True,
+        load_default=None,
+        metadata={"description": "meta of GET /api/results/{task_id} (hero pool, meta state); stored only when given"},
+    )
 
 
 class SnapshotListQuerySchema(Schema):
@@ -661,7 +666,8 @@ class SnapshotDetailSchema(SnapshotSchema):
     """A saved team snapshot with its data."""
 
     data = fields.Dict(
-        required=True, metadata={"description": "Saved data: `team`, `summary` and `players` as sent when saving"}
+        required=True,
+        metadata={"description": "Saved data: `team`, `summary`, `players` and `meta` (when sent) as sent when saving"},
     )
 
 

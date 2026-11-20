@@ -36,6 +36,7 @@ def save_snapshot(
     summary: Optional[dict[str, Any]],
     players: list[dict[str, Any]],
     app_version: str,
+    meta: Optional[dict[str, Any]] = None,
 ) -> tuple[dict[str, Any], bool]:
     """Save a team snapshot, or refresh the one with the same team, day, window and latest league match.
 
@@ -48,6 +49,7 @@ def save_snapshot(
         summary: The player match summary of /api/results, or None when it was not available
         players: Per player account_id, rank and match_count from /api/results
         app_version: Backend version that produced the data
+        meta: The team meta of /api/results (hero pool and meta state), stored only when given
 
     Returns:
         The saved snapshot without its data, and True when a new snapshot was created (False when refreshed)
@@ -56,7 +58,9 @@ def save_snapshot(
     snapshot_date = datetime.fromtimestamp(now, UTC).strftime("%Y-%m-%d")
     last_match_time = team.get("latest_match_time") or 0
     stored_team = {key: value for key, value in team.items() if key != "task_id"}
-    data = json.dumps({"team": stored_team, "summary": summary, "players": players})
+    data = json.dumps(
+        {"team": stored_team, "summary": summary, "players": players, **({"meta": meta} if meta is not None else {})}
+    )
     key = (team_id, snapshot_date, days, last_match_time)
 
     db = get_user_db()

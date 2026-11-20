@@ -285,6 +285,8 @@ function PredictionDetail({ predictionId }: PredictionDetailProps) {
   const snapshots = [detail.team1_snapshot, detail.team2_snapshot]
   const teams = snapshots.map(snapshotTeam)
   const summaries = snapshots.map((s) => s.data.summary ?? null)
+  // Team meta, when both snapshots hold it (saved since it was added): meta rows and the hero pool rule come back
+  const metas = snapshots.every((s) => s.data.meta) ? snapshots.map((s) => s.data.meta) : undefined
   const names = [teamLabel(detail.team1, 0), teamLabel(detail.team2, 1)]
   const settled = isSettled(detail)
   const result = outcome(detail)
@@ -319,11 +321,12 @@ function PredictionDetail({ predictionId }: PredictionDetailProps) {
             showSummaryRows={summaries.some(Boolean)}
             days={snapshots[0].days}
             now={detail.created_at}
+            metas={metas}
           />
         </div>
         <div className="results-column">
           <h2>Team Insights</h2>
-          <InsightsTable teams={teams} ranks={snapshots.map(snapshotRanks)} />
+          <InsightsTable teams={teams} ranks={snapshots.map(snapshotRanks)} metas={metas} />
         </div>
       </div>
 
@@ -338,6 +341,7 @@ function PredictionDetail({ predictionId }: PredictionDetailProps) {
       <ScorePanel
         teams={teams}
         summaries={summaries}
+        metas={metas}
         bestOf={detail.best_of}
         now={detail.created_at}
         headToHead={headToHead}

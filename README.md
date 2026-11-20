@@ -600,7 +600,8 @@ The backend provides REST API endpoints for team statistics, match data, and pla
   bet" above +5% when data covers 60%+ of the weight (Bo1/Bo3/Bo5 only: the odds are for the series winner)
 - Predictions tab "Recommended bet": for every logged bet, the same stake on the team our score favours (scored again
   from the prediction's snapshots with the current weights, at that team's odds), as a column in the outcome format
-  and a totals line under yours; the Bet column tags your bet "Better" (green) or "Worse" (red) by our score
+  and a totals line under yours; the Bet column tags your bet "Better" (green) or "Worse" (red) and shows the bet
+  team's score; snapshots save the team meta too, so the hero pool counts like on Compare (older snapshots lack it)
 
 #### Team Meta (Team Insights "Meta" and "Meta Heroes")
 - Does the team play the Meta tab's pro/ultra heroes, from its 15 newest tournament games (recent window first, then

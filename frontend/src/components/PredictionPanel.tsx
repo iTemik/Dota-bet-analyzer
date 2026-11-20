@@ -40,7 +40,7 @@ const foundText = (bookmaker: string, odds: BookmakerOdds) =>
 
 type SaveResult = { kind: 'prediction'; id: number } | { kind: 'snapshots'; ids: number[] }
 
-// Body of POST /api/snapshots: the team as shown (task_id dropped), its summary and the players' ranks
+// Body of POST /api/snapshots: the team as shown (task_id dropped), its summary, the players' ranks and the team meta
 const snapshotBody = (team: TeamData, result: StatisticsResult | undefined, days: number) => {
   const shown: Partial<TeamData> = { ...team }
   delete shown.task_id
@@ -52,6 +52,7 @@ const snapshotBody = (team: TeamData, result: StatisticsResult | undefined, days
     players: (result?.results ?? [])
       .filter((r) => !r.error)
       .map((r) => ({ account_id: r.account_id, rank: r.rank ?? null, match_count: r.match_count ?? null })),
+    meta: result?.meta ?? null, // so the saved prediction scores the hero pool like Compare did
   }
 }
 

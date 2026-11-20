@@ -86,6 +86,23 @@ describe('PredictionPanel', () => {
     expect(onLineChange).toHaveBeenLastCalledWith({ odds: null, bestOf: null })
   })
 
+  it('saves the team meta in the snapshot, so the saved prediction scores the hero pool too', async () => {
+    const meta = { state: 'actively', pool_state: 'normal', sample: { games: 15, heroes: 35 } }
+    const fetchMock = vi.fn((url: string) =>
+      Promise.resolve({ ok: true, status: 201, json: () => Promise.resolve(url === '/api/snapshots' ? { snapshot_id: 7 } : { prediction_id: 3 }) }),
+    )
+    globalThis.fetch = fetchMock as unknown as typeof fetch
+    const withMeta = [{ ...results[0], meta }, results[1]] as StatisticsResult[]
+    render(<PredictionPanel teams={teams} results={withMeta} days={20} />)
+    await userEvent.type(screen.getByLabelText('Coefficient Team A'), '1.85')
+    await userEvent.type(screen.getByLabelText('Coefficient Team B'), '2.05')
+    await userEvent.click(screen.getByRole('button', { name: 'Save snapshots only' }))
+    await waitFor(() => expect(postedBodies(fetchMock, '/api/snapshots')).toHaveLength(2))
+    const [snapshot1, snapshot2] = postedBodies(fetchMock, '/api/snapshots')
+    expect(snapshot1.meta).toEqual(meta)
+    expect(snapshot2.meta).toBeNull()
+  })
+
   it('tags the bet options Better / Worse with each team\'s score', () => {
     render(<PredictionPanel teams={teams} results={results} days={20} score={-7.94} />)
     const options = within(screen.getByRole('radiogroup', { name: 'Bet on' }))
@@ -164,6 +181,7 @@ describe('PredictionPanel', () => {
       team: { ...teams[0], task_id: undefined },
       summary: results[0].summary,
       players: [{ account_id: 11, rank: 45, match_count: 30 }],
+      meta: null, // no team meta in these results
     })
     expect(snapshot1.team).not.toHaveProperty('task_id')
     expect(snapshot2.team_id).toBe(2)
