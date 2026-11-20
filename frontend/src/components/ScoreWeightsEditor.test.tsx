@@ -68,11 +68,11 @@ describe('ScoreWeightsEditor', () => {
   })
 
   it('resets one changed rule or everything', () => {
-    const settings: ScoreSettings = { scale: 200, rules: { rating: { limits: { gap: 250 } }, roster: { levels: { base: 'low' } } } }
+    const settings: ScoreSettings = { scale: 200, rules: { rating: { limits: { gap: 250 } }, roster: { levels: { one: 'low' } } } }
     const onChange = renderEditor(settings)
     expect(screen.getAllByRole('button', { name: 'Reset' })).toHaveLength(2)
     fireEvent.click(within(row('Rating')).getByRole('button', { name: 'Reset' }))
-    expect(onChange).toHaveBeenCalledWith({ scale: 200, rules: { roster: { levels: { base: 'low' } } } })
+    expect(onChange).toHaveBeenCalledWith({ scale: 200, rules: { roster: { levels: { one: 'low' } } } })
     fireEvent.click(screen.getByRole('button', { name: 'Reset all' }))
     expect(onChange).toHaveBeenLastCalledWith({})
   })

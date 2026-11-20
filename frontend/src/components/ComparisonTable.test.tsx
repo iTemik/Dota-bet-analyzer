@@ -135,11 +135,11 @@ describe('ComparisonTable', () => {
     const tooltip = within(screen.getByText(/^Top 1 XPM \(median\)$/)).getByRole('tooltip')
     expect(tooltip).toHaveTextContent('Description: Median of the team’s highest experience per minute over its tournament games')
     expect(tooltip).not.toHaveTextContent(/GPM|OpenDota/)
-    expect(tooltip).toHaveTextContent('Assumption: A team that farms on average 15% more')
+    expect(tooltip).toHaveTextContent('Assumption: A team that farms on average 12% more')
     expect(tooltip).toHaveTextContent('more for teams with a similar win rate')
   })
 
-  it('colours GPM and XPM only when the teams differ by more than 15%', () => {
+  it('colours GPM and XPM only when the teams differ by more than 12%', () => {
     const farm = (gold_per_min_top1: number, xp_per_min_top1 = 800) => ({
       days: 20,
       matches: 3,
@@ -155,15 +155,15 @@ describe('ComparisonTable', () => {
     let cells = rowCells(/^Top 1 GPM \(median\)$/)
     expect(cells[0]).toHaveClass('cell-pos')
     expect(cells[1]).toHaveClass('cell-neg')
-    expect(within(screen.getByText(/^Top 1 GPM \(median\)$/)).getByRole('tooltip')).toHaveTextContent('differ by 15% or less')
+    expect(within(screen.getByText(/^Top 1 GPM \(median\)$/)).getByRole('tooltip')).toHaveTextContent('differ by 12% or less')
 
-    // 690 vs 600: exactly 15%, no colour; equal Top 2 GPM, no colour
-    rerender(<ComparisonTable teams={[team({ league_form: farm(690) }), team({ league_form: farm(600) })]} {...props} />)
+    // 670 vs 600: 11.7%, no colour; equal Top 2 GPM, no colour
+    rerender(<ComparisonTable teams={[team({ league_form: farm(670) }), team({ league_form: farm(600) })]} {...props} />)
     cells = rowCells(/^Top 1 GPM \(median\)$/)
     expect(cells.map((c) => c.className)).toEqual(['', ''])
 
-    // XPM: 800 vs 700 (14.3%) no colour, 800 vs 600 (33%) coloured
-    rerender(<ComparisonTable teams={[team({ league_form: farm(600, 800) }), team({ league_form: farm(600, 700) })]} {...props} />)
+    // XPM: 780 vs 700 (11.4%) no colour, 800 vs 600 (33%) coloured
+    rerender(<ComparisonTable teams={[team({ league_form: farm(600, 780) }), team({ league_form: farm(600, 700) })]} {...props} />)
     cells = rowCells(/^Top 1 XPM \(median\)$/)
     expect(cells.map((c) => c.className)).toEqual(['', ''])
     rerender(<ComparisonTable teams={[team({ league_form: farm(600, 600) }), team({ league_form: farm(600, 800) })]} {...props} />)

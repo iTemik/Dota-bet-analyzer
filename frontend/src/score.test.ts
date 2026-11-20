@@ -124,9 +124,9 @@ describe('computeScore', () => {
     expect(p.rating).toBe(0) // gap 100, counts only above 300
     expect(p.last_match_rating).toBe(5) // gap 30 > 14
     expect(p.rating_change).toBeCloseTo(6.25) // 50 / 64 x 8
-    expect(p.roster).toBe(2.5)
+    expect(p.roster).toBe(5) // stand-ins without a player list count as 1 stand-in: mediocre
     expect(p.tournament_win_pct).toBeCloseTo(5.867, 3) // huge (8): A is above 70%
-    expect(p.gold_per_min_top1).toBeCloseTo(0.5) // 5% / 20% x 2
+    expect(p.gold_per_min_top1).toBe(0) // 5%: counts only over 12%
     expect(p.last_match).toBe(0)
     expect(p.rating_matches).toBeCloseTo(-1) // -25% / 50% x 2
     expect(p.tournament_matches).toBeCloseTo(0.75)
@@ -143,12 +143,12 @@ describe('computeScore', () => {
 
   it('sums the example to +35 with nearly full coverage', () => {
     const result = score(example)
-    expect(result.score).toBeCloseTo(34.967, 3)
-    expect(result.coverage).toBeCloseTo(84 / 86) // all but head-to-head (low, 2)
+    expect(result.score).toBeCloseTo(35.467, 3)
+    expect(result.coverage).toBeCloseTo(96 / 98) // all but head-to-head (low, 2)
   })
 
   it('is symmetric: swapping the teams flips the sign', () => {
-    expect(score({ ...example, teams: [teamB, teamA] }).score).toBeCloseTo(-34.967, 3)
+    expect(score({ ...example, teams: [teamB, teamA] }).score).toBeCloseTo(-35.467, 3)
   })
 
   it('skips metrics without data and reports zero coverage for empty teams', () => {
@@ -183,6 +183,41 @@ describe('computeScore', () => {
     const pub = (rating_win_percentage: number): ScoreTeam => ({ summary: summary({ rating_win_percentage }) })
     expect(points({ teams: [pub(62), pub(58)], now: NOW }).pub_win_pct).toBe(5)
     expect(points({ teams: [pub(65), pub(70)], now: NOW }).pub_win_pct).toBe(-2.5)
+    expect(points({ teams: [pub(66), pub(55)], now: NOW }).pub_win_pct).toBe(8) // over 65% and gap over 10: high
+  })
+
+  it('weighs lobby win % high when a team is over 65% and the gap is over 10%', () => {
+    const lobby = (tournament_win_percentage: number): ScoreTeam => ({ summary: summary({ tournament_win_percentage }) })
+    expect(points({ teams: [lobby(70), lobby(59)], now: NOW }).lobby_win_pct).toBe(8)
+    expect(points({ teams: [lobby(70), lobby(60)], now: NOW }).lobby_win_pct).toBe(1) // gap 10: normal, 10 / 20 x 2
+    expect(points({ teams: [lobby(40), lobby(64)], now: NOW }).lobby_win_pct).toBe(-2) // nobody over 65%
+  })
+
+  it('weighs roster changes by stand-ins: 1 mediocre, 2+ high, new team high', () => {
+    const player = (id: number, is_core: boolean, games = 5) => ({ id, name: `#${id}`, games, is_core })
+    const core = [1, 2, 3, 4, 5].map((id) => player(id, true))
+    const roster = (roster_state: TeamData['roster_state'], standins: number): Partial<TeamData> => ({
+      roster_source: 'recent_matches',
+      roster_state,
+      players: [...core, ...Array.from({ length: standins }, (_, i) => player(10 + i, false))],
+    })
+    expect(points(withTeams(roster('stable', 0), roster('standins', 1))).roster).toBe(5)
+    expect(points(withTeams(roster('standins', 2), roster('stable', 0))).roster).toBe(-8)
+    expect(points(withTeams(roster('standins', 1), roster('standins', 3))).roster).toBe(3) // 8 - 5
+    expect(points(withTeams(roster('standins', 2), roster('new_team', 0))).roster).toBe(0)
+    expect(points(withTeams(roster('stable', 0), roster('new_team', 0))).roster).toBe(8)
+  })
+
+  it('counts median matches per player only at a gap of 14 or more', () => {
+    const median = (matches_median: number): ScoreTeam => ({ summary: summary({ matches_median }) })
+    expect(points({ teams: [median(19), median(25)], now: NOW }).matches_median).toBe(0)
+    expect(points({ teams: [median(39), median(25)], now: NOW }).matches_median).toBe(5)
+  })
+
+  it('counts GPM and XPM only when they differ by more than 12%', () => {
+    const form = (gpm: number) => ({ league_form: { days: 20, matches: 10, wins: 5, losses: 5, win_percentage: 50, last_match_time: null, farm: farm(gpm) } })
+    expect(points(withTeams(form(565), form(500))).gold_per_min_top1).toBe(2) // 13%
+    expect(points(withTeams(form(560), form(500))).gold_per_min_top1).toBe(0) // 12%
   })
 
   it('weighs low rank players by the gap: 1 mediocre, 2+ high', () => {
@@ -291,10 +326,10 @@ describe('bookmaker comparison', () => {
 
   it('finds the value bet of the worked example', () => {
     const series = seriesWinProbability(mapWinProbability(score(example).score), 3) ?? 0
-    expect(series).toBeCloseTo(0.692, 3)
+    expect(series).toBeCloseTo(0.695, 3)
     expect(favour(series)).toBe('clear')
     const ev = expectedValue(series, 1.65)
-    expect(ev).toBeCloseTo(0.142, 3)
+    expect(ev).toBeCloseTo(0.146, 3)
     expect(isValueBet(ev, score(example).coverage)).toBe(true)
     expect(isValueBet(expectedValue(1 - series, 2.2), 1)).toBe(false)
   })
@@ -323,9 +358,9 @@ describe('score settings storage', () => {
   })
 
   it('saves, loads and removes the settings', () => {
-    saveScoreSettings({ scale: 200, rules: { roster: { levels: { base: 'low' } } } })
-    expect(JSON.parse(localStorage.getItem(SCORE_SETTINGS_KEY) ?? '{}')).toEqual({ scale: 200, rules: { roster: { levels: { base: 'low' } } } })
-    expect(loadScoreSettings()).toEqual({ scale: 200, rules: { roster: { levels: { base: 'low' } } } })
+    saveScoreSettings({ scale: 200, rules: { roster: { levels: { one: 'low' } } } })
+    expect(JSON.parse(localStorage.getItem(SCORE_SETTINGS_KEY) ?? '{}')).toEqual({ scale: 200, rules: { roster: { levels: { one: 'low' } } } })
+    expect(loadScoreSettings()).toEqual({ scale: 200, rules: { roster: { levels: { one: 'low' } } } })
     saveScoreSettings({})
     expect(localStorage.getItem(SCORE_SETTINGS_KEY)).toBeNull()
   })
