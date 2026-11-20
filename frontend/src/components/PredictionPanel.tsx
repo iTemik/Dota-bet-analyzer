@@ -3,12 +3,14 @@ import { postJson, requestJson } from '../api'
 import { formatDateTime, teamName } from '../format'
 import { type BetChoice, SERIES_OPTIONS, decisionBody, decisionErrors, parseDecimal } from '../predictions'
 import type { BookmakerOdds, StatisticsResult, TeamData } from '../types'
+import FavourTag from './FavourTag'
 
 interface PredictionPanelProps {
   teams: (TeamData | undefined)[] // team 1 and team 2
   results: (StatisticsResult | undefined)[] // GET /api/results/{task_id} per team
   days: number // statistics window the teams were loaded with
   onLineChange?: (line: BookmakerLine) => void // the bookmaker box as typed, for the team score's bookmaker rows
+  favoured?: 1 | 2 | null // team our score favours: tags the bet options Better / Worse (null = even)
 }
 
 /** Bookmaker box values: odds of team 1 and team 2 (null until valid) and the series length (null = n/a). */
@@ -57,7 +59,7 @@ const snapshotBody = (team: TeamData, result: StatisticsResult | undefined, days
  * "Log prediction" panel under the comparison tables. Bookmaker values (odds, series) are in their own box,
  * apart from the decision (bet, stake, comment). Saving stores both team snapshots, then the prediction.
  */
-function PredictionPanel({ teams, results, days, onLineChange }: PredictionPanelProps) {
+function PredictionPanel({ teams, results, days, onLineChange, favoured }: PredictionPanelProps) {
   const [odds, setOdds] = useState(['', ''])
   const [bestOf, setBestOf] = useState('3')
   const [bet, setBet] = useState<BetChoice>('none')
@@ -210,6 +212,7 @@ function PredictionPanel({ teams, results, days, onLineChange }: PredictionPanel
                       onChange={() => edit(setBet)(choice)}
                     />
                     {choice === 'none' ? 'No bet' : names[Number(choice) - 1]}
+                    {choice !== 'none' && favoured && <FavourTag favoured={Number(choice) === favoured} />}
                   </label>
                 ))}
               </div>

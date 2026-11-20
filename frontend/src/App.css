@@ -412,6 +412,16 @@ pre {
   gap: 0.5rem;
 }
 
+/* Team score under the name; the team our score favours gets a green cell */
+.comparison-table th.team-favoured {
+  background: var(--pos-bg);
+}
+
+.team-score {
+  font-size: 0.9rem;
+  font-weight: normal;
+}
+
 .team-logo {
   height: 80px;
   width: 100px;

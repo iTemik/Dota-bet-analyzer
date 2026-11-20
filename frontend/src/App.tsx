@@ -14,6 +14,8 @@ import ScorePanel from './components/ScorePanel'
 import TeamAutocomplete from './components/TeamAutocomplete'
 import { requestJson } from './api'
 import { loadMetaParams } from './meta'
+import { computeScore, type ScoreInput } from './score'
+import { SCORE_RULES, useScoreSettings } from './scoreRules'
 import { type ProgressData, ProgressStreamError, followProgress } from './progress'
 import type { Match, MatchesSummary, Statistics, StatisticsResult, TeamData } from './types'
 import { useTeamInput } from './useTeamInput'
@@ -46,11 +48,15 @@ const predictionIdFromHash = (hash: string): number | null => {
  *    - This is a background task (players_statistics_task).
  *    - It's needed to follow progress /api/stream-progress/{task_id} and get results at /api/results/{task_id}
  */
+const nowSeconds = (): number => Date.now() / 1000
+
 function App() {
   const team1 = useTeamInput()
   const team2 = useTeamInput()
   const [statistics, setStatistics] = useState<Statistics | null>(null)
   const [line, setLine] = useState<BookmakerLine | null>(null) // the Log prediction panel's odds and series
+  const [scoreSettings] = useScoreSettings() // the Team Score weights, shared with the score panel
+  const [shownAt, setShownAt] = useState(0) // when the statistics arrived: the score's Last Match rule is judged then
   const [summaryData, setSummaryData] = useState<Record<string, StatisticsResult> | null>(null)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -161,6 +167,7 @@ function App() {
       // This ensures old data doesn't persist between searches
       setSummaryData(null)
       setStatistics(data)
+      setShownAt(nowSeconds())
 
       // Check if any team has a task_id (ongoing background task)
       const taskIds = data.teams.map((team) => team.task_id).filter((taskId): taskId is string => Boolean(taskId))
@@ -253,6 +260,19 @@ function App() {
   const teams = [statistics?.teams?.[0], statistics?.teams?.[1]]
   const summaries = teams.map((team) => getSummaryForTeam(team?.task_id))
   const results = teams.map((team) => (team?.task_id ? summaryData?.[team.task_id] : undefined))
+  const metas = results.map((r) => r?.meta)
+  // Same score as the Team Score panel, for the comparison table header and the prediction form
+  const score = statistics
+    ? computeScore(
+        {
+          teams: [0, 1].map((i) => ({ team: teams[i], summary: summaries[i], meta: metas[i] })) as ScoreInput['teams'],
+          now: shownAt,
+        },
+        SCORE_RULES,
+        scoreSettings,
+      ).score
+    : 0
+  const favoured = score > 0 ? 1 : score < 0 ? 2 : null
 
   return (
     <div className="container">
@@ -294,7 +314,14 @@ function App() {
       {/* Mounted only while open, so the list is loaded again after logging a new prediction */}
       {tab === 'predictions' && (
         <div className="tab-panel">
-          {predictionId ? <PredictionDetail key={predictionId} predictionId={predictionId} /> : <PredictionList />}
+          {predictionId ? (
+            <PredictionDetail key={predictionId} predictionId={predictionId} />
+          ) : (
+            <>
+              <PredictionList />
+              <MatchesTables finishedOnly />
+            </>
+          )}
         </div>
       )}
 
@@ -350,7 +377,8 @@ function App() {
                   summaries={summaries}
                   showSummaryRows={Boolean(summaryData)}
                   days={STATS_DAYS}
-                  metas={results.map((r) => r?.meta)}
+                  metas={metas}
+                  score={score}
                 />
               </div>
 
@@ -374,6 +402,7 @@ function App() {
               results={results}
               days={STATS_DAYS}
               onLineChange={setLine}
+              favoured={favoured}
             />
           </div>
         )}
@@ -381,16 +410,11 @@ function App() {
         <MatchesTables onSelect={checkMatch} />
 
         {/* Raw JSON stays at the very bottom, below the matches */}
-        {statistics && (
+        {summaryData && (
           <div className="results-section raw-json-section">
-            <Collapsible title="Raw team stats JSON">
-              <pre>{JSON.stringify(statistics, null, 2)}</pre>
+            <Collapsible title="Match Statistics Summary">
+              <pre>{JSON.stringify(summaryData, null, 2)}</pre>
             </Collapsible>
-            {summaryData && (
-              <Collapsible title="Match Statistics Summary">
-                <pre>{JSON.stringify(summaryData, null, 2)}</pre>
-              </Collapsible>
-            )}
           </div>
         )}
       </div>

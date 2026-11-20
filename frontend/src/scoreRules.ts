@@ -3,6 +3,7 @@
 // editor) by itself.
 import { COMPARISON_SCORE_ROWS } from './components/ComparisonTable'
 import { INSIGHT_SCORE_ROWS } from './components/InsightsTable'
+import { useSyncExternalStore } from 'react'
 import { WEIGHT, type ScoreRule, type ScoreSettings, type WeightLevel } from './score'
 import type { HeadToHead } from './types'
 
@@ -81,12 +82,42 @@ export const loadScoreSettings = (): ScoreSettings => {
   }
 }
 
+// Settings shared by every panel on the page: a save updates all users of useScoreSettings at once
+const listeners = new Set<() => void>()
+let unsaved: ScoreSettings | null = null // when storage is blocked
+
 /** Save weights editor settings; empty settings remove the saved ones. */
 export const saveScoreSettings = (settings: ScoreSettings): void => {
   try {
     if (Object.keys(settings).length) localStorage.setItem(SCORE_SETTINGS_KEY, JSON.stringify(settings))
     else localStorage.removeItem(SCORE_SETTINGS_KEY)
+    unsaved = null
   } catch {
-    // storage blocked: the change still applies until reload
+    unsaved = settings // storage blocked: the change still applies until reload
   }
+  listeners.forEach((listener) => listener())
 }
+
+const subscribe = (listener: () => void) => {
+  listeners.add(listener)
+  return () => listeners.delete(listener)
+}
+// Same object while the saved text is the same (useSyncExternalStore needs a stable snapshot)
+let cached: { raw: string | null; settings: ScoreSettings } | null = null
+const snapshot = (): ScoreSettings => {
+  if (unsaved) return unsaved
+  let raw: string | null = null
+  try {
+    raw = localStorage.getItem(SCORE_SETTINGS_KEY)
+  } catch {
+    // storage blocked: defaults
+  }
+  if (!cached || cached.raw !== raw) cached = { raw, settings: loadScoreSettings() }
+  return cached.settings
+}
+
+/** Weights editor settings and their setter (saves them), shared by the score panel, tables and forms. */
+export const useScoreSettings = (): [ScoreSettings, (settings: ScoreSettings) => void] => [
+  useSyncExternalStore(subscribe, snapshot),
+  saveScoreSettings,
+]

@@ -1,4 +1,5 @@
 import { fireEvent, render, screen, within } from '@testing-library/react'
+import userEvent from '@testing-library/user-event'
 import { beforeEach, describe, expect, it } from 'vitest'
 import { SCORE_SETTINGS_KEY } from '../scoreRules'
 import type { LeagueForm, TeamData } from '../types'
@@ -32,8 +33,8 @@ describe('ScorePanel', () => {
     // rating change 50 / 64 x 8 = 6.25 for Alpha; win % 30 / 30 x 8 (huge: Alpha over 70%) = 8 for Alpha
     render(<ScorePanel teams={[team('Alpha', 40, 80), team('Beta', -10, 50)]} summaries={[null, null]} />)
     expect(screen.getByText('Alpha: slight favourite · score +14.3')).toBeInTheDocument()
-    expect(rowCells('Map win chance')).toEqual(['Map win chance', '55%', '45%'])
-    expect(rowCells('Bo3 win chance')).toEqual(['Bo3 win chance', '58%', '42%'])
+    expect(rowCells('Match win chance')).toEqual(['Match win chance', '58%', '42%']) // Bo3 series chance
+    expect(scoreTable().queryByText('Map win chance')).not.toBeInTheDocument()
     expect(rowCells('Rating change')).toEqual(['Rating change', '+6.3', ''])
     expect(rowCells('Tournament win %')).toEqual(['Tournament win %', '+8.0', ''])
     expect(screen.getByRole('progressbar', { name: 'Rating change points' })).toBeInTheDocument()
@@ -43,8 +44,16 @@ describe('ScorePanel', () => {
     // rating change 6.25 and win % 10 / 30 x 5 = 1.7 for Beta, team 2; Bo5 56% is slight (Bo3 would be 55%, even)
     render(<ScorePanel teams={[team('Alpha', -10, 50), team('Beta', 40, 60)]} summaries={[null, null]} bestOf={5} />)
     expect(screen.getByText('Beta: slight favourite · score -7.9')).toBeInTheDocument()
-    expect(rowCells('Bo5 win chance')).toEqual(['Bo5 win chance', '44%', '56%'])
+    expect(rowCells('Match win chance')).toEqual(['Match win chance', '44%', '56%'])
     expect(rowCells('Rating change')).toEqual(['Rating change', '', '+6.3'])
+  })
+
+  it('is closed until its header is clicked', async () => {
+    render(<ScorePanel teams={[team('Alpha', 40, 80), team('Beta', -10, 50)]} summaries={[null, null]} />)
+    const header = screen.getByRole('heading', { name: 'Team Score' })
+    expect(document.querySelector('.score-panel .collapsible-content')).not.toHaveClass('expanded')
+    await userEvent.click(header)
+    expect(document.querySelector('.score-panel .collapsible-content')).toHaveClass('expanded')
   })
 
   it('shows only the map chance for Bo2 and lists rules that are even or below their thresholds', () => {
@@ -140,7 +149,7 @@ describe('ScorePanel', () => {
       render(
         <ScorePanel teams={[team('Alpha', 40, 80), team('Beta', -10, 50)]} summaries={[null, null]} bestOf={null} odds={[2.5, 1.6]} />,
       )
-      expect(scoreTable().queryByText(/win chance$/, { selector: 'td' })).toHaveTextContent('Map win chance')
+      expect(rowCells('Match win chance')).toEqual(['Match win chance', '55%', '45%']) // the map chance
       expect(scoreTable().queryByText('Value (per 1 unit staked)')).not.toBeInTheDocument()
       expect(screen.getByText(/No value for this series length/)).toBeInTheDocument()
     })

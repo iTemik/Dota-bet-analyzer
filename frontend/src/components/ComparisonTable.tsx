@@ -3,6 +3,7 @@ import { CELL_NEGATIVE, CELL_POSITIVE, formatDate, formatFixed, formatPercent, f
 import { ROSTER_STATES, getStandins } from '../roster'
 import { full, pairRule, positive, scaled, shareGap, type ScoreRule, type ScoreTeam } from '../score'
 import type { FarmStats, LeagueForm, MatchesSummary, TeamData, TeamMeta, TeamPoolState } from '../types'
+import FavourTag from './FavourTag'
 import { RowInfoIcon, type RowInfo } from './RowInfo'
 
 type Summary = MatchesSummary | null
@@ -15,6 +16,7 @@ interface ComparisonTableProps {
   days: number // window used for the label when the team has no league form
   now?: number // unix time the Last Match colours are judged at; a saved prediction passes its own time
   metas?: Meta[] // team meta per team from the task results; without it the meta rows are hidden (snapshots)
+  score?: number // team score (positive = team 1 favoured): shown under the team names, the favoured one highlighted
 }
 
 // Team Comparison row: `compare` picks the number to colour by, `better` says which side wins
@@ -582,21 +584,30 @@ export const COMPARISON_SCORE_ROWS: { label: string; rule?: ScoreRule }[] = [...
 }))
 
 /** Team Comparison table for two teams; renders live statistics and saved snapshots alike. */
-const ComparisonTable = ({ teams, summaries, showSummaryRows, days, now, metas }: ComparisonTableProps) => {
+const ComparisonTable = ({ teams, summaries, showSummaryRows, days, now, metas, score }: ComparisonTableProps) => {
   const [shownAt] = useState(() => Date.now() / 1000) // live statistics are judged at the time they were shown
   return (
     <table className="stats-table comparison-table">
       <thead>
         <tr>
           <th></th>
-          {[0, 1].map((i) => (
-            <th key={i}>
-              <div className="team-header">
-                <span>{teamName(teams[i], i)}</span>
-                {teams[i]?.logo_url && <img src={teams[i].logo_url} alt={`Team ${i + 1} Logo`} className="team-logo" />}
-              </div>
-            </th>
-          ))}
+          {[0, 1].map((i) => {
+            const side = score === undefined ? 0 : Math.sign(i === 0 ? score : -score) // 1 favoured, -1 not, 0 even
+            return (
+              <th key={i} className={side > 0 ? 'team-favoured' : undefined}>
+                <div className="team-header">
+                  <span>{teamName(teams[i], i)}</span>
+                  {teams[i]?.logo_url && <img src={teams[i].logo_url} alt={`Team ${i + 1} Logo`} className="team-logo" />}
+                  {score !== undefined && (
+                    <span className="team-score">
+                      Score {formatSigned(i === 0 ? score : -score)}
+                      {side !== 0 && <FavourTag favoured={side > 0} />}
+                    </span>
+                  )}
+                </div>
+              </th>
+            )
+          })}
         </tr>
       </thead>
       <tbody>

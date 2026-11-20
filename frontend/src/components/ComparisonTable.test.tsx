@@ -53,6 +53,15 @@ describe('ComparisonTable', () => {
     expect(screen.queryByText('Team ID')).not.toBeInTheDocument()
   })
 
+  it('shows the team score under the names and highlights the favoured team', () => {
+    render(<ComparisonTable teams={[team({ team: 'Alpha' }), team({ team: 'Beta' })]} summaries={[null, null]} showSummaryRows={false} days={20} score={-7.94} />)
+    const headers = screen.getAllByRole('columnheader').slice(1)
+    expect(headers.map((h) => h.textContent)).toEqual(['AlphaScore -7.9Worse', 'BetaScore +7.9Better'])
+    expect(headers[1]).toHaveClass('team-favoured')
+    expect(headers[0]).not.toHaveClass('team-favoured')
+    expect(within(headers[1]).getByText('Better')).toHaveClass('favour-tag-yes')
+  })
+
   it('colours the better rating green and the worse red', () => {
     const teams = [team({ rating: 1500 }), team({ rating: 1300 })]
     render(<ComparisonTable teams={teams} summaries={[null, null]} showSummaryRows={false} days={20} />)
