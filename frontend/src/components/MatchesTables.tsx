@@ -7,7 +7,8 @@ import { Pager, TeamCells } from './seriesTable'
 
 interface MatchesTablesProps {
   // Called with an upcoming series the user clicked
-  onSelect: (match: Match) => void
+  onSelect?: (match: Match) => void
+  finishedOnly?: boolean // only the Finished Matches table (Predictions tab)
 }
 
 // A series with a team still to be decided can't be checked
@@ -84,8 +85,8 @@ function MatchesTable({ label, matches, finished, onSelect }: MatchesTableProps)
   )
 }
 
-/** Upcoming (soonest first) and recently finished (newest first) series from Liquipedia. */
-function MatchesTables({ onSelect }: MatchesTablesProps) {
+/** Upcoming (soonest first) and recently finished (newest first) series from Liquipedia; finishedOnly hides upcoming. */
+function MatchesTables({ onSelect, finishedOnly = false }: MatchesTablesProps) {
   const [data, setData] = useState<Matches | null>(null)
   const [error, setError] = useState<string | null>(null)
 
@@ -106,11 +107,15 @@ function MatchesTables({ onSelect }: MatchesTablesProps) {
 
   return (
     <div className="matches-section">
-      <h2>Upcoming Matches</h2>
-      {upcoming.length ? (
-        <MatchesTable label="Upcoming matches" matches={upcoming} finished={false} onSelect={onSelect} />
-      ) : (
-        <p className="prediction-hint">No upcoming matches.</p>
+      {!finishedOnly && (
+        <>
+          <h2>Upcoming Matches</h2>
+          {upcoming.length ? (
+            <MatchesTable label="Upcoming matches" matches={upcoming} finished={false} onSelect={onSelect} />
+          ) : (
+            <p className="prediction-hint">No upcoming matches.</p>
+          )}
+        </>
       )}
       <h2>Finished Matches</h2>
       {finished.length ? (

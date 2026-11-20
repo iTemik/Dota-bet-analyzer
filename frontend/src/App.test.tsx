@@ -1222,6 +1222,9 @@ describe('App Component', () => {
             expect(window.location.hash).toBe('#predictions')
             expect(await screen.findByText(/No predictions yet/i)).toBeVisible()
             expect(screen.getByPlaceholderText(/Enter first team name/i)).not.toBeVisible()
+            // Finished matches (only) under the predictions list; the hidden Compare tab's tables are not visible
+            expect(await screen.findByRole('heading', { name: 'Finished Matches' })).toBeVisible()
+            expect(screen.queryByRole('heading', { name: 'Upcoming Matches' })).not.toBeInTheDocument()
         })
 
         it('shows the Data status line under the tabs on every tab', async () => {
@@ -1920,10 +1923,6 @@ describe('App Component', () => {
             expect(screen.getByPlaceholderText(/Enter first team name/i)).toHaveValue('Aurora')
             expect(screen.getByPlaceholderText(/Enter second team name/i)).toHaveValue('New Squad')
 
-            // Raw JSON stays below the matches tables
-            const raw = await screen.findByRole('heading', { name: 'Raw team stats JSON' })
-            const upcoming = screen.getByRole('heading', { name: 'Upcoming Matches' })
-            expect(upcoming.compareDocumentPosition(raw) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
         })
     })
 })

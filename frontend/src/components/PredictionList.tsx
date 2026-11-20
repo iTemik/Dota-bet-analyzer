@@ -7,6 +7,7 @@ import { loadScoreSettings } from '../scoreRules'
 import type { Prediction, PredictionDetail } from '../types'
 import { bestOfLabel, scoreLabel, usePage } from '../series'
 import { Pager, TeamCells } from './seriesTable'
+import FavourTag from './FavourTag'
 import BetOutcome, { Loss, Profit, SIMULATION_NOTE } from './BetOutcome'
 
 type Filter = 'all' | 'pending' | 'settled'
@@ -22,20 +23,6 @@ type Favoured = Map<number, 1 | 2 | null> // prediction id -> team our score fav
 const hasBet = (p: Prediction): boolean => p.bet_team !== null && p.stake !== null
 
 const RECOMMENDED = 'Recommended bet'
-
-/** Short tag after the user's bet: green when the bet team is the one our score favours, red when it is not. */
-function FavourTag({ prediction, team }: { prediction: Prediction; team: 1 | 2 | null | undefined }) {
-  if (prediction.bet_team === null || !team) return null
-  const favoured = prediction.bet_team === team
-  return (
-    <span
-      className={`favour-tag ${favoured ? 'favour-tag-yes' : 'favour-tag-no'}`}
-      title={favoured ? 'Bet on the team our score favours' : 'Bet against the team our score favours'}
-    >
-      {favoured ? 'Better' : 'Worse'}
-    </span>
-  )
-}
 
 const betText = (p: Prediction): string => {
   if (p.bet_team === null) return 'No bet'
@@ -86,7 +73,7 @@ function PredictionTable({ predictions, favoured }: { predictions: Prediction[];
                 </td>
                 <td>
                   {betText(p)}
-                  <FavourTag prediction={p} team={team} />
+                  {p.bet_team !== null && team && <FavourTag favoured={p.bet_team === team} />}
                 </td>
                 <td className={`outcome outcome-${result}`}>
                   <BetOutcome prediction={p} />

@@ -106,6 +106,13 @@ describe('MatchesTables', () => {
     expect(screen.getAllByRole('button', { name: 'Next' })).toHaveLength(1)
   })
 
+  it('shows only the finished series with finishedOnly', async () => {
+    mockFetch(matches)
+    render(<MatchesTables finishedOnly />)
+    expect(within(await screen.findByRole('table', { name: 'Finished matches' })).getAllByRole('row')).toHaveLength(3)
+    expect(screen.queryByRole('heading', { name: 'Upcoming Matches' })).not.toBeInTheDocument()
+  })
+
   it('says when there are no matches', async () => {
     mockFetch({ upcoming: [], finished: [] })
     render(<MatchesTables onSelect={vi.fn()} />)
