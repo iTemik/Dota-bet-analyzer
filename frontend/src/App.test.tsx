@@ -1284,6 +1284,8 @@ describe('App Component', () => {
             expect(screen.getByRole('link', { name: 'Predictions' })).toHaveAttribute('aria-current', 'page')
             await waitFor(() => expect(globalThis.fetch).toHaveBeenCalledWith('/api/predictions/3', undefined))
             expect(screen.getByRole('link', { name: '← All predictions' })).toHaveAttribute('href', '#predictions')
+            // the review screen also has the Finished Matches table below it
+            expect(await screen.findByRole('heading', { name: 'Finished Matches' })).toBeVisible()
         })
 
         it('keeps the typed teams when switching tabs and back', async () => {

@@ -314,14 +314,9 @@ function App() {
       {/* Mounted only while open, so the list is loaded again after logging a new prediction */}
       {tab === 'predictions' && (
         <div className="tab-panel">
-          {predictionId ? (
-            <PredictionDetail key={predictionId} predictionId={predictionId} />
-          ) : (
-            <>
-              <PredictionList />
-              <MatchesTables finishedOnly />
-            </>
-          )}
+          {predictionId ? <PredictionDetail key={predictionId} predictionId={predictionId} /> : <PredictionList />}
+          {/* Finished matches under the list and under a prediction's review screen */}
+          <MatchesTables finishedOnly />
         </div>
       )}
 
