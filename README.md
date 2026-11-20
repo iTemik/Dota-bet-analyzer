@@ -10,6 +10,18 @@ The web application provides analytic services and highlights about the Dota 2 t
 
 **This project was created for coding learning purpose**
 
+## Still beta? Our excuses
+
+We know the project still has a lot of flaws:
+
+- It runs only on your own computer, not online. We feel your pain. We're not ready to run it as a public web
+  service yet, and we'll launch the site once we and the codebase are ready.
+- The prediction model is far from good. It's simple, rough and uses very little math, so keep relying on your own
+  brain and knowledge. It just gives you a dashboard and hints for your decisions. We're collecting data and real use
+  cases to improve it.
+- We built it just for fun, and it doesn't make us any money yet. If it ever does, we can put much more effort into it.
+- If you found it useful, please [give us some feedback](https://github.com/iTemik/Dota-bet-analyzer/issues).
+
 ## Docs
 
 - [Features](docs/features.md): what each page and endpoint does
@@ -96,3 +108,17 @@ OpenDota's team assignments are often stale. The 75%/50% shares are a temporary 
 ## Past performance reflects current performance
 
 It is assumed that there is no match-fixing (322) and that team performance is stable, so recently played matches can be used for statistical calculations.
+
+# License
+
+The code is under the [Apache License 2.0](LICENSE): free to use, change and share, also commercially, as long as
+copies keep the license and the [NOTICE](NOTICE) file that credits this project.
+
+The data the app fetches is not covered by this license and belongs to its sources:
+
+- Teams, players, matches and heroes: [OpenDota](https://www.opendota.com) (Dota 2 data from Valve).
+- Upcoming and finished series and tournaments: [Liquipedia](https://liquipedia.net/dota2/), CC BY-SA 3.0. Liquipedia
+  gives betting-related projects no access to its paid API, so ask them before any public or commercial use.
+- Bookmaker odds: Pari, read for personal use only; don't republish them.
+
+Dota 2 is a trademark of Valve Corporation. This project is not affiliated with Valve, OpenDota, Liquipedia or Pari.
