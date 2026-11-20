@@ -1,7 +1,7 @@
 import { useState, type ReactNode } from 'react'
 import { CELL_NEGATIVE, CELL_POSITIVE, formatDate, formatFixed, formatPercent, formatSigned, teamName } from '../format'
 import { ROSTER_STATES, getStandins } from '../roster'
-import { full, pairRule, positive, scaled, shareGap, type ScoreRule, type ScoreTeam } from '../score'
+import { full, pairRule, positive, scaled, shareGap, type RuleContext, type ScoreRule, type ScoreTeam } from '../score'
 import type { FarmStats, LeagueForm, MatchesSummary, TeamData, TeamMeta, TeamPoolState } from '../types'
 import FavourTag from './FavourTag'
 import { RowInfoIcon, type RowInfo } from './RowInfo'
@@ -98,8 +98,15 @@ const getDeltaClass = (delta: number | undefined): string => {
 const getRosterRank = (team: TeamData | undefined): number | null =>
   team?.roster_source === 'recent_matches' && team.roster_state ? (ROSTER_STATES[team.roster_state]?.rank ?? null) : null
 
-const scoreRosterRank = (t: ScoreTeam): number | null =>
-  t.team?.roster_source === 'recent_matches' && t.team.roster_state ? (ROSTER_STATES[t.team.roster_state]?.rank ?? null) : null
+// Roster changes level for the score: null = stable, undefined = no roster data.
+// Stand-ins count from the players; a snapshot without players counts as 1 stand-in.
+const rosterLevel = ({ team }: ScoreTeam): 'one' | 'more' | 'new_team' | null | undefined => {
+  const state = team?.roster_source === 'recent_matches' ? team.roster_state : undefined
+  if (!state || !ROSTER_STATES[state]) return undefined
+  if (state === 'new_team') return 'new_team'
+  if (state === 'stable') return null
+  return team?.players && getStandins(team as TeamData).length >= 2 ? 'more' : 'one'
+}
 
 const renderRosterState = (team: TeamData | undefined) => {
   const state = team?.roster_source === 'recent_matches' && team.roster_state ? ROSTER_STATES[team.roster_state] : null
@@ -108,6 +115,11 @@ const renderRosterState = (team: TeamData | undefined) => {
   const suffix = standins ? ` (${standins} stand-in${standins === 1 ? '' : 's'})` : ''
   return <span title={state.hint}>{`${state.label}${suffix}`}</span>
 }
+
+// Pub and lobby win %: a team over `strongAbove` % with a gap over `strongGap` % gets the full edge at the `strong` level
+const STRONG_WIN_LABELS = { strong: 'A team over Strong % and gap over Strong gap', strongAbove: 'Strong %', strongGap: 'Strong gap (%)' }
+const strongWinEdge = (a: number, b: number, ctx: RuleContext) =>
+  Math.max(a, b) > ctx.limit('strongAbove') && Math.abs(a - b) > ctx.limit('strongGap') ? { edge: full(a - b), weight: ctx.weight('strong') } : null
 
 const STALE_DAYS = 14 // a last match older than this is a long break
 
@@ -127,7 +139,7 @@ const formatLeagueRecord = (form: LeagueForm | null | undefined): string => {
   return `${form.wins}-${form.losses} (${(form.win_percentage ?? 0).toFixed(1)}%)`
 }
 
-const FARM_THRESHOLD_PERCENT = 15 // GPM and XPM differences up to this % are not coloured
+const FARM_THRESHOLD_PERCENT = 12 // GPM and XPM differences up to this % are not coloured or scored
 
 // Top 1 and top 2 GPM and XPM rows, all from league_form.farm
 const farmRows = (): CompareRowConfig[] =>
@@ -146,7 +158,7 @@ const farmRows = (): CompareRowConfig[] =>
         description: `Median of the team’s ${long} over its tournament games in the window.`,
         colors: `Higher is green, lower is red; no colour when they differ by ${FARM_THRESHOLD_PERCENT}% or less.`,
         assumption:
-          'A team that farms on average 15% more than the other has the advantage in long games. Usually it is a sign of better skills. With a low win rate the numbers are lower, so the comparison means more for teams with a similar win rate.',
+          'A team that farms on average 12% more than the other has the advantage in long games. Usually it is a sign of better skills. With a low win rate the numbers are lower, so the comparison means more for teams with a similar win rate.',
       },
       compare: value,
       better: 'higher',
@@ -155,11 +167,15 @@ const farmRows = (): CompareRowConfig[] =>
       score: {
         key,
         name: label,
-        levels: { base: 'low' },
-        limits: { bigShare: 0.2 },
+        levels: { big: 'low' }, // counts only over the gap, like the colours
+        limits: { gapPercent: FARM_THRESHOLD_PERCENT },
+        labels: { big: 'Gap over the limit', gapPercent: 'Limit (%)' },
         apply: pairRule(
           (t) => positive(t.team?.league_form?.farm?.[key]),
-          (a, b, ctx) => ({ edge: shareGap(a, b, ctx.limit('bigShare')), weight: ctx.weight('base') }),
+          (a, b, ctx) =>
+            (100 * Math.abs(a - b)) / Math.min(a, b) > ctx.limit('gapPercent')
+              ? { edge: full(a - b), weight: ctx.weight('big') }
+              : { edge: 0, weight: 0 },
         ),
       },
     }
@@ -253,10 +269,15 @@ const compareRows = (teams: (TeamData | undefined)[], days: number, now: number)
     score: {
       key: 'roster',
       name: 'Roster changes',
-      levels: { base: 'mediocre' },
-      limits: { bigGap: 2 }, // Stable 0, Stand-ins 1, New team 2
-      labels: { bigGap: 'Full edge at gap (Stable 0, Stand-ins 1, New team 2)' },
-      apply: pairRule(scoreRosterRank, (a, b, ctx) => ({ edge: scaled(b - a, ctx.limit('bigGap')), weight: ctx.weight('base') })),
+      // each team's weight by its roster; the score counts the difference, towards the team with fewer changes
+      levels: { one: 'mediocre', more: 'high', new_team: 'high' },
+      labels: { one: '1 stand-in', more: '2+ stand-ins', new_team: 'New team' },
+      apply: ({ teams }, ctx) => {
+        const levels = teams.map(rosterLevel)
+        if (levels.includes(undefined)) return null
+        const [a, b] = levels.map((level) => (level ? ctx.weight(level) : 0))
+        return a === b ? { edge: 0, weight: 0 } : { edge: a < b ? 1 : -1, weight: Math.abs(a - b) }
+      },
     },
   },
   {
@@ -374,12 +395,14 @@ const compareRows = (teams: (TeamData | undefined)[], days: number, now: number)
     score: {
       key: 'pub_win_pct',
       name: 'Pub win %',
-      levels: { high: 'mediocre' }, // counts only when a team is above `above`
-      limits: { above: 60, bigGap: 10 },
-      labels: { high: 'A team over the limit', above: 'Limit (%)', bigGap: 'Full edge at gap when both are over (%)' },
+      levels: { high: 'mediocre', strong: 'high' }, // counts only when a team is above `above`
+      limits: { above: 60, bigGap: 10, strongAbove: 65, strongGap: 10 },
+      labels: { ...STRONG_WIN_LABELS, high: 'A team over the limit', above: 'Limit (%)', bigGap: 'Full edge at gap when both are over (%)' },
       apply: pairRule(
         (t) => t.summary?.rating_win_percentage,
         (a, b, ctx) => {
+          const strong = strongWinEdge(a, b, ctx)
+          if (strong) return strong
           const above = ctx.limit('above')
           if (a > above && b > above) return { edge: scaled(a - b, ctx.limit('bigGap')), weight: ctx.weight('high') }
           if (a > above || b > above) return { edge: a > above ? 1 : -1, weight: ctx.weight('high') }
@@ -402,11 +425,12 @@ const compareRows = (teams: (TeamData | undefined)[], days: number, now: number)
     score: {
       key: 'lobby_win_pct',
       name: 'Lobby win %',
-      levels: { base: 'low' },
-      limits: { bigGap: 20 },
+      levels: { base: 'low', strong: 'high' },
+      limits: { bigGap: 20, strongAbove: 65, strongGap: 10 },
+      labels: { ...STRONG_WIN_LABELS, base: 'Normal' },
       apply: pairRule(
         (t) => t.summary?.tournament_win_percentage,
-        (a, b, ctx) => ({ edge: scaled(a - b, ctx.limit('bigGap')), weight: ctx.weight('base') }),
+        (a, b, ctx) => strongWinEdge(a, b, ctx) ?? { edge: scaled(a - b, ctx.limit('bigGap')), weight: ctx.weight('base') },
       ),
     },
   },
@@ -511,15 +535,12 @@ const compareRows = (teams: (TeamData | undefined)[], days: number, now: number)
     score: {
       key: 'matches_median',
       name: 'Median matches per player',
-      levels: { base: 'low', big: 'mediocre' }, // big: at the gap or more
+      levels: { big: 'mediocre' }, // counts only at the gap or more
       limits: { gap: 14 },
-      labels: { base: 'Gap under the limit', big: 'Gap at the limit or more', gap: 'Limit (games)' },
+      labels: { big: 'Gap at the limit or more', gap: 'Limit (games)' },
       apply: pairRule(
         (t) => t.summary?.matches_median,
-        (a, b, ctx) =>
-          Math.abs(a - b) >= ctx.limit('gap')
-            ? { edge: full(a - b), weight: ctx.weight('big') }
-            : { edge: scaled(a - b, ctx.limit('gap')), weight: ctx.weight('base') },
+        (a, b, ctx) => (Math.abs(a - b) >= ctx.limit('gap') ? { edge: full(a - b), weight: ctx.weight('big') } : { edge: 0, weight: 0 }),
       ),
     },
   },
