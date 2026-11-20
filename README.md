@@ -2,7 +2,11 @@
 
 The web application provides analytic services and highlights about the Dota 2 teams on the pro scene to help make better-informed bets.
 
-![Team comparison and Team Insights tables](docs/images/comparison-insights.png)
+| | |
+|---|---|
+| **1. Compare teams and their stats**<br>![Compare teams](docs/images/promo/compare.gif) | **2. Discover their strengths and weaknesses**<br>![Team insights](docs/images/promo/insights.gif) |
+| **3. Test your intuition against the recommended bets**<br>![Predictions](docs/images/promo/predictions.gif) | **4. Log your observations and improve the predictions**<br>![Review](docs/images/promo/review.gif) |
+| **5. Don't let the crowd fool you: compare with bookmaker odds**<br>![Pari odds](docs/images/promo/pari.gif) | |
 
 **This project was created for coding learning purpose**
 
