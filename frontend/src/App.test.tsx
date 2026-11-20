@@ -1255,6 +1255,8 @@ describe('App Component', () => {
             await userEvent.click(screen.getByRole('link', { name: 'Score weights' }))
             await waitFor(() => expect(window.location.hash).toBe('#weights'))
             expect(screen.getByRole('heading', { name: 'Score weights' })).toBeVisible()
+            expect(screen.getByText('Experimental')).toBeVisible()
+            expect(screen.getByText('Calibration of the weights is in progress: the score and win chance may change.', { exact: false })).toBeVisible()
             expect(screen.getByRole('combobox', { name: 'Rating change: Weight' })).toBeVisible()
             expect(screen.getByPlaceholderText(/Enter first team name/i)).not.toBeVisible()
         })

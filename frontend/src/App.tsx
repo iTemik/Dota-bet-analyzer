@@ -316,6 +316,9 @@ function App() {
         <div className="tab-panel">
           <h2>Score weights</h2>
           <p className="prediction-hint">
+            <span className="simulation-badge">Experimental</span> Calibration of the weights is in progress: the score and win chance may change.
+          </p>
+          <p className="prediction-hint">
             Weights of the Team Score rules. Changes apply at once on Compare and Predictions and are kept in the browser.
           </p>
           <ScoreWeightsEditor settings={scoreSettings} onChange={setScoreSettings} />
