@@ -589,10 +589,10 @@ The backend provides REST API endpoints for team statistics, match data, and pla
   n/a show the map chance), favour label (even, slight, clear, strong favourite at 55/62/72%), and each rule's points
   as a bar in the favoured team's column; the "Team Score" section is closed until clicked
 - The score also sits under the team names at the top of Team Comparison, the favoured team's cell highlighted, with a
-  "Better" (green) / "Worse" (red) tag; the same tags mark the teams in Log prediction's "Bet on"
+  "Better" (green) / "Worse" (red) tag; the same tags and scores mark the teams in Log prediction's "Bet on"
 - Each rule lives in its table row (`score`), so a new scored row joins the score by itself; recalculated every time,
   no DB change
-- "Score weights" editor in the panel: every row of the scored tables in table order (unscored rows shown as "Not
+- "Score weights" tab (`#weights`, after Meta; the panel links to it): every row of the scored tables in table order (unscored rows shown as "Not
   scored"), weight word per tier and limits per rule, points per word and the confidence knob; changes apply at once,
   are kept in the browser, and reset per rule or all
 - Bookmaker rows once odds are known (typed or from "Get odds from Pari" on Compare, the saved odds on a prediction):
@@ -767,7 +767,7 @@ npm test          # Run tests
 #### Predictions
 - List of saved predictions, newest first, laid out like the Finished Matches table: time, Bo, each team's logo and name, score (maps won, "-" while pending), then odds, bet and stake, and outcome (won, lost, no bet) with the bet's profit in green and loss in red; 10 per page
 - Possible profit = net win, stake * (odds of the bet team - 1) (the returned stake is not profit), possible loss = stake; a pending bet shows both; amounts are a simulation (no real money), marked so on the totals line and in each amount's tooltip
-- Finished Matches table (Liquipedia) below the list
+- Finished Matches table (Liquipedia) below the list and below a prediction's review screen
 - Filter: all, pending or settled, with a totals line (bets, won, lost, pending, each with its amount: "Bets: n (+/-net) · Won: n (+profit) · Lost: n (-stakes) · Pending: n (+possible profit/-possible loss)", net = won profit minus lost stakes)
 - Click a prediction (`#predictions/<id>`) to see the Team Comparison and Team Insights tables as they were saved, a **Head-to-head** table (match link to OpenDota, date, winner; matches played before the prediction are tagged, and a "Prediction saved" row sits between the matches after and before it), the bookmaker values and decision, and a disabled **Played heroes** placeholder
 - **Add review** opens the result (buttons valid for the series format, or maps won per team when it is n/a) and a review note; once saved it becomes **Edit review**

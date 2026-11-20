@@ -17,7 +17,6 @@ import { SCORE_RULES, useScoreSettings } from '../scoreRules'
 import type { MatchesSummary, TeamData, TeamMeta } from '../types'
 import Bar from './Bar'
 import Collapsible from './Collapsible'
-import ScoreWeightsEditor from './ScoreWeightsEditor'
 
 interface ScorePanelProps {
   teams: (Partial<TeamData> | undefined)[] // team 1 and team 2
@@ -37,7 +36,7 @@ const percent = (p: number): string => `${Math.round(p * 100)}%`
  */
 function ScorePanel({ teams, summaries, metas, bestOf = 3, now, headToHead, odds }: ScorePanelProps) {
   const [shownAt] = useState(() => Date.now() / 1000) // live statistics are judged at the time they were shown
-  const [settings, changeSettings] = useScoreSettings()
+  const [settings] = useScoreSettings()
   const barMax = Math.max(...Object.values({ ...WEIGHT, ...settings.points })) // one rule's top weight fills the bar
   const input: ScoreInput = {
     teams: [0, 1].map((i) => ({ team: teams[i], summary: summaries[i], meta: metas?.[i] })) as ScoreInput['teams'],
@@ -126,9 +125,10 @@ function ScorePanel({ teams, summaries, metas, bestOf = 3, now, headToHead, odds
             {!values && ' No value for this series length: the odds are for the series winner.'}
           </p>
         )}
-        <Collapsible lazy title={`Score weights${settings.points || settings.scale || settings.rules ? ' (changed)' : ''}`}>
-          <ScoreWeightsEditor settings={settings} onChange={changeSettings} />
-        </Collapsible>
+        <p className="prediction-hint">
+          Weights{settings.points || settings.scale || settings.rules ? ' (changed)' : ''}: <a href="#weights">Score weights</a>{' '}
+          tab.
+        </p>
       </Collapsible>
     </div>
   )

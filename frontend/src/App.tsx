@@ -11,6 +11,7 @@ import PredictionDetail from './components/PredictionDetail'
 import PredictionList from './components/PredictionList'
 import PredictionPanel, { type BookmakerLine } from './components/PredictionPanel'
 import ScorePanel from './components/ScorePanel'
+import ScoreWeightsEditor from './components/ScoreWeightsEditor'
 import TeamAutocomplete from './components/TeamAutocomplete'
 import { requestJson } from './api'
 import { loadMetaParams } from './meta'
@@ -26,14 +27,15 @@ import trollFace from './assets/trollface.png'
 const STATS_DAYS = 20
 
 // Page tabs, kept in the URL hash so a refresh stays on the tab ("#predictions/12" is the Predictions tab too)
-type Tab = 'compare' | 'meta' | 'predictions'
+type Tab = 'compare' | 'meta' | 'predictions' | 'weights'
 const TABS: { id: Tab; label: string }[] = [
   { id: 'compare', label: 'Compare' },
   { id: 'predictions', label: 'Predictions' },
   { id: 'meta', label: 'Meta' },
+  { id: 'weights', label: 'Score weights' },
 ]
 const tabFromHash = (hash: string): Tab =>
-  hash.startsWith('#predictions') ? 'predictions' : hash === '#meta' ? 'meta' : 'compare'
+  hash.startsWith('#predictions') ? 'predictions' : hash === '#meta' ? 'meta' : hash === '#weights' ? 'weights' : 'compare'
 // Prediction opened on the Predictions tab ("#predictions/12"), null for the list
 const predictionIdFromHash = (hash: string): number | null => {
   const id = /^#predictions\/(\d+)$/.exec(hash)?.[1]
@@ -55,7 +57,7 @@ function App() {
   const team2 = useTeamInput()
   const [statistics, setStatistics] = useState<Statistics | null>(null)
   const [line, setLine] = useState<BookmakerLine | null>(null) // the Log prediction panel's odds and series
-  const [scoreSettings] = useScoreSettings() // the Team Score weights, shared with the score panel
+  const [scoreSettings, setScoreSettings] = useScoreSettings() // Team Score weights, shared with the score panel
   const [shownAt, setShownAt] = useState(0) // when the statistics arrived: the score's Last Match rule is judged then
   const [summaryData, setSummaryData] = useState<Record<string, StatisticsResult> | null>(null)
   const [loading, setLoading] = useState(false)
@@ -272,7 +274,6 @@ function App() {
         scoreSettings,
       ).score
     : 0
-  const favoured = score > 0 ? 1 : score < 0 ? 2 : null
 
   return (
     <div className="container">
@@ -311,17 +312,22 @@ function App() {
         </div>
       )}
 
+      {tab === 'weights' && (
+        <div className="tab-panel">
+          <h2>Score weights</h2>
+          <p className="prediction-hint">
+            Weights of the Team Score rules. Changes apply at once on Compare and Predictions and are kept in the browser.
+          </p>
+          <ScoreWeightsEditor settings={scoreSettings} onChange={setScoreSettings} />
+        </div>
+      )}
+
       {/* Mounted only while open, so the list is loaded again after logging a new prediction */}
       {tab === 'predictions' && (
         <div className="tab-panel">
-          {predictionId ? (
-            <PredictionDetail key={predictionId} predictionId={predictionId} />
-          ) : (
-            <>
-              <PredictionList />
-              <MatchesTables finishedOnly />
-            </>
-          )}
+          {predictionId ? <PredictionDetail key={predictionId} predictionId={predictionId} /> : <PredictionList />}
+          {/* Finished matches under the list and under a prediction's review screen */}
+          <MatchesTables finishedOnly />
         </div>
       )}
 
@@ -402,7 +408,7 @@ function App() {
               results={results}
               days={STATS_DAYS}
               onLineChange={setLine}
-              favoured={favoured}
+              score={score}
             />
           </div>
         )}

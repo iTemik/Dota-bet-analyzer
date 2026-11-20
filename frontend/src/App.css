@@ -67,6 +67,18 @@ input {
   transition: all 0.3s ease;
 }
 
+/* Dropdowns match the text inputs: same padding, border, colours and height */
+select {
+  box-sizing: content-box;
+  height: 1.125em; /* the text inputs' line height, so both are 46px tall */
+  padding: 0.75rem;
+  border: 2px solid var(--border);
+  border-radius: 6px;
+  background: var(--input-bg);
+  color: black;
+  font-size: 1rem;
+}
+
 input:focus {
   outline: none;
   border-color: white;
@@ -626,12 +638,6 @@ pre {
 
 .prediction-field input[type='text'] {
   width: 9rem;
-}
-
-.prediction-field select {
-  padding: 0.7rem;
-  border-radius: 6px;
-  font-size: 1rem;
 }
 
 .prediction-field textarea {
