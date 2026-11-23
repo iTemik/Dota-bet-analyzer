@@ -31,6 +31,9 @@ RATE_LIMIT_RETRIES = 3  # Repeats after the first rate-limited answer or timeout
 RATE_LIMIT_WAITS = (10, 20, 40)  # Seconds to wait before each repeat when the API gives no Retry-After
 RATE_LIMIT_MAX_WAIT = 60  # Never wait longer than this for one repeat
 RETRY_ERRORS = (requests.Timeout, requests.ConnectionError)  # Short-window protection: no answer instead of 429
+NO_ANSWER_RETRIES = 1  # Repeats after a timeout or dropped connection: when OpenDota is down, more only adds minutes
+PLAYER_TIMEOUT = 20  # Seconds for per-player requests (matches, heroes); healthy answers take a few seconds
+DAILY_LIMIT_TEXT = "daily api limit"  # 429 body when OpenDota's daily budget is used up: repeating only adds to it
 
 RADIANT_SLOT_LIMIT = 128  # player_slot < 128 is Radiant
 
@@ -78,6 +81,14 @@ def _retry_delay(resp: Optional[requests.Response], attempt: int) -> int:
     return RATE_LIMIT_WAITS[min(attempt, len(RATE_LIMIT_WAITS) - 1)]
 
 
+def _is_daily_limit(resp: requests.Response) -> bool:
+    """Whether a 429 answer says OpenDota's daily budget is used up (repeats would still be counted)."""
+    try:
+        return resp.status_code == 429 and DAILY_LIMIT_TEXT in (resp.text or "").lower()
+    except (AttributeError, TypeError):
+        return False
+
+
 def opendota_get(
     url: str,
     params: Optional[dict[str, Any]] = None,
@@ -87,7 +98,9 @@ def opendota_get(
 ) -> requests.Response:
     """GET an OpenDota URL, postponing and repeating the request on HTTP 403/429, timeouts and dropped connections.
 
-    Each attempt first waits for a slot of the shared OpenDota rate limiter.
+    Each attempt first waits for a slot of the shared OpenDota rate limiter. HTTP 403/429 are repeated up to
+    RATE_LIMIT_RETRIES times, timeouts and dropped connections only NO_ANSWER_RETRIES times, and a 429 saying the
+    daily limit is used up is never repeated (OpenDota counts rejected requests too).
 
     Args:
         url: URL or API path (e.g. "/teams/123")
@@ -116,11 +129,11 @@ def opendota_get(
         try:
             resp = requests.get(url, **kwargs)
         except RETRY_ERRORS as exc:
-            if attempt >= RATE_LIMIT_RETRIES:
+            if attempt >= NO_ANSWER_RETRIES:
                 raise
             reason = f"no answer ({type(exc).__name__})"
         else:
-            if resp.status_code not in RATE_LIMIT_STATUSES or attempt >= RATE_LIMIT_RETRIES:
+            if resp.status_code not in RATE_LIMIT_STATUSES or attempt >= RATE_LIMIT_RETRIES or _is_daily_limit(resp):
                 return resp
             reason = f"limit reached (HTTP {resp.status_code})"
         delay = _retry_delay(resp, attempt)
@@ -160,6 +173,8 @@ def get_json(
     except Exception as exc:
         raise OpenDotaError(503, "NETWORK_ERROR", f"Network error fetching data: {exc}") from exc
 
+    if _is_daily_limit(resp):
+        raise OpenDotaError(429, "DAILY_LIMIT", "OpenDota daily request limit is used up")
     if resp.status_code != 200:
         raise OpenDotaError(resp.status_code, "HTTP_ERROR", f"HTTP {resp.status_code} from API")
 

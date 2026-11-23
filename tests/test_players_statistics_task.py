@@ -18,6 +18,7 @@ def _run_task(
     failing: set[int] | None = None,
     rank_accounts: list[int] | None = None,
     rank_failing: set[int] | None = None,
+    down: set[int] | None = None,
 ):
     """Run the task with mocked data sources and return (progress calls, stored results)."""
     failing = failing or set()
@@ -25,6 +26,8 @@ def _run_task(
     def fake_matches(account_id, days, on_wait=None):
         if account_id in failing:
             raise RuntimeError("boom")
+        if account_id in (down or set()):
+            raise OpenDotaError(500, "HTTP_ERROR", "HTTP 500 from API")
         on_wait(5)
         return []
 
@@ -110,6 +113,35 @@ def test_stand_in_ranks_are_kept_out_of_summary_and_counts():
     assert results["summary"]["avg_rank"] == 100.0
     assert results["summary"]["bad_rank_players"] == 0
     assert calls[-1][3] == 100.0
+
+
+def test_task_skips_the_rest_when_opendota_is_down():
+    """After OUTAGE_FAILURES server errors in a row the remaining players are skipped without a request."""
+    accounts = [1, 2, 3, 4, 5]
+    calls, results = _run_task(accounts, {}, down={1, 2, 3, 4, 5}, rank_accounts=[6])
+    errors = [r["error"] for r in results["results"]]
+    assert errors[: tasks.OUTAGE_FAILURES] == ["HTTP 500 from API"] * tasks.OUTAGE_FAILURES
+    assert errors[tasks.OUTAGE_FAILURES :] == [tasks.OUTAGE_MESSAGE] * (len(accounts) + 1 - tasks.OUTAGE_FAILURES)
+    assert results["successful"] == 0
+    assert calls[-1][2] == (
+        "Completed: fetched data for 0/5 players. OpenDota is not answering, the rest was skipped: try again later"
+    )
+    assert "Skipped: OpenDota is not answering, skipped account 4" in [c[2] for c in calls]
+
+
+def test_outage_guard_counts_only_server_errors_in_a_row():
+    guard = tasks.OutageGuard(limit=2)
+    guard.record(OpenDotaError(500, "HTTP_ERROR", "x"))
+    guard.record(RuntimeError("not OpenDota"))
+    guard.record(OpenDotaError(404, "HTTP_ERROR", "x"))
+    assert not guard.down
+    guard.record()
+    guard.record(OpenDotaError(503, "NETWORK_ERROR", "x"))
+    assert not guard.down
+    guard.record(OpenDotaError(429, "DAILY_LIMIT", "x"))
+    assert guard.down
+    guard.record()
+    assert not guard.down
 
 
 def test_task_error_reports_failure():

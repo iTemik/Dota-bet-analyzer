@@ -27,40 +27,88 @@ from backend.team_meta import (
 
 logger = setup_logging(__name__)
 
+OUTAGE_FAILURES = 3  # Requests failing in a row with an OpenDota server error before the task skips the rest
+OUTAGE_MESSAGE = "Skipped: OpenDota is not answering"
+
+
+class OutageGuard:
+    """Counts OpenDota server errors in a row, so a task stops asking once OpenDota is clearly down.
+
+    Attributes:
+        limit: Failures in a row after which `down` is True
+        in_a_row: Current run of failures
+        skipped: Requests the task skipped because OpenDota was down
+    """
+
+    def __init__(self, limit: int = OUTAGE_FAILURES) -> None:
+        self.limit = limit
+        self.in_a_row = 0
+        self.skipped = 0
+
+    @property
+    def down(self) -> bool:
+        """Whether the last `limit` requests all failed with an OpenDota server error."""
+        return self.in_a_row >= self.limit
+
+    def record(self, exc: Optional[BaseException] = None) -> None:
+        """Record one request: None for a success, else its exception (only server errors count)."""
+        if exc is None:
+            self.in_a_row = 0
+        elif isinstance(exc, OpenDotaError) and (exc.status >= 500 or exc.code == "DAILY_LIMIT"):
+            self.in_a_row += 1
+
+    def skip(self, progress: ProgressReporter, account_id: int) -> dict[str, Any]:
+        """Report a skipped account and return its results entry."""
+        self.skipped += 1
+        progress.report(
+            f"{OUTAGE_MESSAGE}, skipped account {account_id}", {"account_id": account_id, "error": OUTAGE_MESSAGE}
+        )
+        return {"account_id": account_id, "error": OUTAGE_MESSAGE}
+
 
 def _meta_needs_players(team_meta: dict[str, Any]) -> bool:
     return needs_player_heroes(team_meta["games"], TeamMetaParams(**team_meta["params"]))
 
 
-def _team_meta_step(progress: ProgressReporter, team_meta: dict[str, Any]) -> dict[str, Any]:
+def _team_meta_step(
+    progress: ProgressReporter, team_meta: dict[str, Any], guard: Optional[OutageGuard] = None
+) -> dict[str, Any]:
     """Fetch each core player's heroes (league + pubs, deeper window) and compute the team meta state.
 
     One progress step per core player, only when the team has too few games for a state (needs_player_heroes).
 
     Args:
         progress: The task's progress reporter
+        guard: Skips the player requests once OpenDota is down (a new guard when None)
         team_meta: {"games": load_team_games output, "core": accounts, "meta_params", "params"} from
             compute_statistics
 
     Returns:
         compute_team_meta output, or {"error": message} when the hero stats are unavailable
     """
+    guard = guard or OutageGuard()
     games = team_meta["games"]
     days = player_heroes_days(games["deep_start"])
     player_heroes: dict[int, Optional[dict[int, int]]] = {}
     core = team_meta["core"] if _meta_needs_players(team_meta) else []
     for account_id in core:
         progress.next()
+        if guard.down:
+            player_heroes[account_id] = None
+            guard.skip(progress, account_id)
+            continue
 
         def report_wait(delay: int, account_id: int = account_id) -> None:
             progress.waiting(delay, account_id)
 
         try:
             player_heroes[account_id] = get_player_heroes_cached(account_id, days, on_wait=report_wait)
+            guard.record()
             progress.report(f"Got heroes of account {account_id}", {"account_id": account_id})
         except Exception as e:
             # Unknown practice: the player's league picks from the team games still count
             player_heroes[account_id] = None
+            guard.record(e)
             progress.report(
                 f"Error fetching heroes for account {account_id}: {e!s}", {"account_id": account_id, "error": str(e)}
             )
@@ -77,6 +125,47 @@ def _team_meta_step(progress: ProgressReporter, team_meta: dict[str, Any]) -> di
         MetaParams(**team_meta["meta_params"]),
         TeamMetaParams(**team_meta["params"]),
     )
+
+
+def _stand_in_ranks_step(progress: ProgressReporter, rank_accounts: list[int], guard: OutageGuard) -> list[dict]:
+    """Fetch only the leaderboard rank of each stand-in (one progress step each).
+
+    Args:
+        progress: The task's progress reporter
+        rank_accounts: Stand-in account IDs
+        guard: Skips the requests once OpenDota is down
+
+    Returns:
+        One results entry per account: its rank, or its error
+    """
+    results: list[dict] = []
+    for account_id in rank_accounts:
+        progress.next()
+        if guard.down:
+            results.append(guard.skip(progress, account_id))
+            continue
+
+        def report_wait(delay: int, account_id: int = account_id) -> None:
+            progress.waiting(delay, account_id)
+
+        try:
+            player_rank = get_rank_cached(account_id, on_wait=report_wait)
+            guard.record()
+            results.append({"account_id": account_id, "rank": player_rank})
+            progress.report(
+                f"Got Player rank {player_rank} for account {account_id}",
+                {"account_id": account_id, "player_rank": player_rank},
+            )
+        except Exception as e:
+            guard.record(e)
+            results.append({"account_id": account_id, "error": str(e)})
+            progress.report(
+                f"Error fetching rank for account {account_id}: {e!s}",
+                {"account_id": account_id, "error": str(e)},
+            )
+
+        time.sleep(0.01)
+    return results
 
 
 @celery.task(bind=True)
@@ -118,8 +207,12 @@ def players_statistics_task(
         results: list[dict[str, int | str | None]] = []  # Per player: match_count and rank, or the fetch error
         matches_stats = []  # List of lists: each inner list is matches for one player
         ranks = RankTally()
+        guard = OutageGuard()
         for account_id in accounts:
             progress.next()
+            if guard.down:
+                results.append(guard.skip(progress, account_id))
+                continue
 
             def report_wait(delay: int, account_id: int = account_id) -> None:
                 progress.waiting(delay, account_id)
@@ -127,6 +220,7 @@ def players_statistics_task(
             try:
                 # Fetch match data for this account
                 player_matches = get_matches_cached(account_id=account_id, days=days, on_wait=report_wait)
+                guard.record()
                 matches_stats.append(player_matches)  # Append as a list per player
 
                 # Only the count and rank are kept per player; the matches themselves feed `summary`
@@ -140,6 +234,7 @@ def players_statistics_task(
                 try:
                     player_rank = get_rank_cached(account_id, on_wait=report_wait)
                 except OpenDotaError as e:
+                    guard.record(e)
                     # The matches still count; the rank stays unknown and is asked again next time (not cached)
                     player_rank = None
                     logger.warning(f"Rank unavailable for account {account_id}: {e.message}")
@@ -155,6 +250,7 @@ def players_statistics_task(
             except Exception as e:
                 # Handle per-account errors gracefully
                 # The player is left out of `summary`; the error stays visible in the results payload
+                guard.record(e)
                 results.append({"account_id": account_id, "error": str(e)})
                 progress.report(
                     f"Error fetching data for account {account_id}: {e!s}",
@@ -169,29 +265,9 @@ def players_statistics_task(
 
         successful = len([r for r in results if "error" not in r])
 
-        for account_id in rank_accounts:
-            progress.next()
+        results.extend(_stand_in_ranks_step(progress, rank_accounts, guard))
 
-            def report_wait(delay: int, account_id: int = account_id) -> None:
-                progress.waiting(delay, account_id)
-
-            try:
-                player_rank = get_rank_cached(account_id, on_wait=report_wait)
-                results.append({"account_id": account_id, "rank": player_rank})
-                progress.report(
-                    f"Got Player rank {player_rank} for account {account_id}",
-                    {"account_id": account_id, "player_rank": player_rank},
-                )
-            except Exception as e:
-                results.append({"account_id": account_id, "error": str(e)})
-                progress.report(
-                    f"Error fetching rank for account {account_id}: {e!s}",
-                    {"account_id": account_id, "error": str(e)},
-                )
-
-            time.sleep(0.01)
-
-        meta = _team_meta_step(progress, team_meta) if team_meta else None
+        meta = _team_meta_step(progress, team_meta, guard) if team_meta else None
 
         # Store heavy results separately (not in progress stream)
         store_results(
@@ -206,8 +282,11 @@ def players_statistics_task(
         )
 
         # Lightweight final message (no heavy data)
+        message = f"Completed: fetched data for {successful}/{len(accounts)} players"
+        if guard.skipped:
+            message += ". OpenDota is not answering, the rest was skipped: try again later"
         progress.done(
-            f"Completed: fetched data for {successful}/{len(accounts)} players",
+            message,
             {"successful": successful, "total": len(accounts)},
         )
 
