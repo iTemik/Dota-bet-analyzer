@@ -109,23 +109,18 @@ describe('ComparisonTable', () => {
   })
 
   it('shows top 1 and top 2 GPM and XPM medians from the league form', () => {
-    const form = (radiant_wins: number, gpm_top1: number) => ({
+    const form = (gpm_top1: number) => ({
       days: 20,
       matches: 6,
       wins: 4,
       losses: 2,
       win_percentage: 66.7,
       last_match_time: null,
-      radiant_matches: 4,
-      radiant_wins,
-      radiant_win_percentage: (100 * radiant_wins) / 4,
       farm: { games: 6, gold_per_min_top1: gpm_top1, gold_per_min_top2: 600.5, xp_per_min_top1: 800, xp_per_min_top2: 700 },
     })
-    const teams = [team({ league_form: form(3, 750) }), team({ league_form: { ...form(1, 650), farm: null } })]
+    const teams = [team({ league_form: form(750) }), team({ league_form: { ...form(650), farm: null } })]
     render(<ComparisonTable teams={teams} summaries={[null, null]} showSummaryRows={false} days={20} />)
 
-    // Radiant Win % is in Team Insights
-    expect(screen.queryByText('Radiant Win %')).not.toBeInTheDocument()
     // A team without parsed games has "-" and no colours
     const top1 = rowCells(/^Top 1 GPM \(median\)$/)
     expect(top1.map((c) => c.textContent)).toEqual(['750', '-'])

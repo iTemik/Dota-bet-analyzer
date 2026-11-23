@@ -26,9 +26,6 @@ export interface LeagueForm {
   losses: number
   win_percentage: number | null
   last_match_time: number | null
-  radiant_matches?: number
-  radiant_wins?: number
-  radiant_win_percentage?: number | null
   duration_median?: number | null // seconds
   farm?: FarmStats | null
 }

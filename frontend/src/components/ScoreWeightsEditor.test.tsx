@@ -25,7 +25,7 @@ describe('ScoreWeightsEditor', () => {
     expect(comparison).toContain('Other Matches')
     expect(comparison.at(-1)).toBe('Hero pool')
     expect(within(row('Other Matches')).getByText('Not scored')).toBeInTheDocument()
-    expect(within(row('Radiant Win %')).getByText('Not scored')).toBeInTheDocument()
+    expect(within(row('Stand-ins')).getByText('Not scored')).toBeInTheDocument()
     expect(screen.getByRole('combobox', { name: 'Median match duration: Weight' })).toHaveValue('low')
   })
 
