@@ -71,35 +71,6 @@ describe('InsightsTable', () => {
     expect(rowCells('Other Players').map((c) => c.textContent)).toEqual(['None', '-'])
     expect(rowCells('Last Tournament Match with core players').map((c) => c.textContent)).toEqual(['-', '-'])
     expect(rowCells('Median Match Duration').map((c) => c.textContent)).toEqual(['-', '-'])
-    expect(rowCells('Radiant Win %').map((c) => c.textContent)).toEqual(['-', '-'])
-  })
-
-  it('shows the Radiant record without colours', () => {
-    const form = (radiant_wins: number) => ({
-      days: 20,
-      matches: 6,
-      wins: 4,
-      losses: 2,
-      win_percentage: 66.7,
-      last_match_time: null,
-      radiant_matches: 4,
-      radiant_wins,
-      radiant_win_percentage: (100 * radiant_wins) / 4,
-    })
-    render(<InsightsTable teams={[team({ league_form: form(3) }), team({ league_form: form(1) })]} ranks={[]} />)
-    const cells = rowCells('Radiant Win %')
-    expect(cells.map((c) => c.textContent)).toEqual(['3-1 (75.0%)', '1-3 (25.0%)'])
-    expect(cells[0].style.backgroundColor).toBe('')
-  })
-
-  it('explains how to read the Radiant record in its tooltip', () => {
-    render(<InsightsTable teams={[team(), team()]} ranks={[]} />)
-    expect(within(screen.getByText('Radiant Win %')).getByRole('tooltip')).toHaveTextContent(
-      'Assumption: The map favours Radiant (objectives are easier to defend, about 10-15% more win chance), so teams ' +
-        'often take Radiant instead of first pick. Low Radiant win %: a bad sign, the team loses even with the side ' +
-        'advantage. Few Radiant games out of all games: the team prefers first pick; with a low win % it drafts poorly. ' +
-        'Many Radiant games with a high win %: the team uses the side advantage, or simply drafts better.',
-    )
   })
 
   it('shows the median match duration as minutes and seconds', () => {

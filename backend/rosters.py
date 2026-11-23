@@ -398,8 +398,6 @@ def compute_league_form(matches: list[TeamMatch], days: int, now: Optional[int] 
     min_time = window_start(days, now)
     recent = [m for m in matches if m.start_time >= min_time and m.won is not None]
     wins = sum(1 for m in recent if m.won)
-    radiant = [m for m in recent if m.radiant]
-    radiant_wins = sum(1 for m in radiant if m.won)
     durations = [m.duration for m in recent if m.duration]
     return LeagueForm(
         days=days,
@@ -408,9 +406,6 @@ def compute_league_form(matches: list[TeamMatch], days: int, now: Optional[int] 
         losses=len(recent) - wins,
         win_percentage=100 * wins / len(recent) if recent else None,
         last_match_time=max((m.start_time for m in recent), default=None),
-        radiant_matches=len(radiant),
-        radiant_wins=radiant_wins,
-        radiant_win_percentage=100 * radiant_wins / len(radiant) if radiant else None,
         duration_median=statistics.median(durations) if durations else None,
     )
 

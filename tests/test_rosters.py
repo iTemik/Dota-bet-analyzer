@@ -362,7 +362,7 @@ def test_league_form_counts_wins_on_both_sides():
     assert form.last_match_time == NOW - DAY
 
 
-def test_league_form_radiant_wins_and_duration_median():
+def test_league_form_duration_median():
     matches = [
         TeamMatch(match_id=1, start_time=NOW - DAY, radiant=True, radiant_win=True, duration=1800),
         TeamMatch(match_id=2, start_time=NOW - 2 * DAY, radiant=True, radiant_win=False, duration=2400),
@@ -370,10 +370,8 @@ def test_league_form_radiant_wins_and_duration_median():
         TeamMatch(match_id=4, start_time=NOW - 4 * DAY, radiant=True, radiant_win=True),
     ]
     form = compute_league_form(matches, days=20, now=NOW)
-    assert (form.radiant_matches, form.radiant_wins) == (3, 2)
-    assert form.radiant_win_percentage == pytest.approx(66.666, rel=1e-3)
     assert form.duration_median == 2400  # the game without a duration is skipped
-    assert compute_league_form([], days=20, now=NOW).radiant_win_percentage is None
+    assert compute_league_form([], days=20, now=NOW).duration_median is None
 
 
 def test_farm_stats_take_top_two_gpm_and_xpm_of_each_game():

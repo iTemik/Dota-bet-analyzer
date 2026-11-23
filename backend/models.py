@@ -61,9 +61,6 @@ class LeagueForm(BaseModel):
         losses: Number of league losses
         win_percentage: Wins share in percent (None when there are no matches)
         last_match_time: Start time of the latest league match (unix seconds)
-        radiant_matches: League matches played on Radiant
-        radiant_wins: League wins on Radiant
-        radiant_win_percentage: Radiant wins share in percent (None when the team never played on Radiant)
         duration_median: Median match length in seconds (None when no duration is known)
         farm: Top 1 and top 2 GPM and XPM medians (None when no game has known GPM and XPM)
     """
@@ -74,9 +71,6 @@ class LeagueForm(BaseModel):
     losses: int = 0
     win_percentage: Optional[float] = None
     last_match_time: Optional[int] = None
-    radiant_matches: int = 0
-    radiant_wins: int = 0
-    radiant_win_percentage: Optional[float] = None
     duration_median: Optional[float] = None
     farm: Optional[FarmStats] = None
 
