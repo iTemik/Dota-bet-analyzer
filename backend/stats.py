@@ -18,6 +18,7 @@ from backend.models import (
 )
 from backend.opendota import (
     OPENDOTA_API,
+    PLAYER_TIMEOUT,
     OpenDotaError,
     WaitCallback,
     get_json,
@@ -511,7 +512,7 @@ def get_matches(account_id: int, days: int = 20, on_wait: Optional[WaitCallback]
     url = f"{OPENDOTA_API}/players/{account_id}/matches?date={days}"
     logger.debug(f"Fetching matches for account {account_id} from URL: {url}")
     try:
-        data = get_json(url, timeout=60, on_wait=on_wait)
+        data = get_json(url, timeout=PLAYER_TIMEOUT, on_wait=on_wait)
     except OpenDotaError as exc:
         raise OpenDotaError(exc.status, exc.code, f"Failed to fetch matches for account {account_id}: {exc}") from exc
 

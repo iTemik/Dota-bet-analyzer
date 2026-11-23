@@ -10,6 +10,8 @@ import pytest
 
 # Add root directory to Python path so backend and scripts modules can be found
 sys.path.insert(0, str(Path(__file__).parent.parent))
+# Before any backend import: test runs log to logs/tests.log, never into the app's log
+os.environ.setdefault("D2BA_LOG_FILE", "tests.log")
 
 import backend
 from backend import create_app

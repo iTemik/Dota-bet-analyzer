@@ -34,7 +34,13 @@ from typing import Any, Optional
 from backend.cache import cached_json
 from backend.logging_config import setup_logging
 from backend.meta import MetaParams, compute_meta
-from backend.opendota import OpenDotaError, WaitCallback, get_json, is_radiant
+from backend.opendota import (
+    PLAYER_TIMEOUT,
+    OpenDotaError,
+    WaitCallback,
+    get_json,
+    is_radiant,
+)
 from backend.rosters import (
     DAY_SECONDS,
     get_match_lineups,
@@ -179,7 +185,9 @@ def _fetch_player_heroes(account_id: int, days: int, on_wait: Optional[WaitCallb
     Raises:
         OpenDotaError: If the request failed (not cached, so it is asked again next time)
     """
-    data = get_json(f"/players/{int(account_id)}/heroes", params={"date": days}, on_wait=on_wait)
+    data = get_json(
+        f"/players/{int(account_id)}/heroes", params={"date": days}, timeout=PLAYER_TIMEOUT, on_wait=on_wait
+    )
     games: dict[str, int] = {}
     for entry in data if isinstance(data, list) else []:
         try:

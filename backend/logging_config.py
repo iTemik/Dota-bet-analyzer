@@ -9,6 +9,9 @@ import logging
 import os
 import sys
 
+LOG_FILE_ENV = "D2BA_LOG_FILE"  # File name in logs/; tests set it so they never write into the app's log
+DEFAULT_LOG_FILE = "dota2_bet_analyzer.log"
+
 
 def setup_logging(logger_name: str = __name__) -> logging.Logger:
     """Configure and return a logger with console and file handlers.
@@ -53,7 +56,7 @@ def setup_logging(logger_name: str = __name__) -> logging.Logger:
     console_handler.setLevel(logging.DEBUG)
 
     # Create file handler with UTF-8 encoding
-    log_file_path = os.path.join(logs_dir, "dota2_bet_analyzer.log")
+    log_file_path = os.path.join(logs_dir, os.getenv(LOG_FILE_ENV, DEFAULT_LOG_FILE))
     file_handler = logging.FileHandler(log_file_path, encoding="utf-8")
     file_handler.setLevel(logging.DEBUG)
 
