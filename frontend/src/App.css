@@ -526,6 +526,12 @@ pre {
   gap: 0.5rem;
 }
 
+/* Fewer than patch_settle_days days since the latest patch (Meta tab, Insights Meta row) */
+.patch-warning {
+  color: var(--gold);
+  font-weight: 600;
+}
+
 .data-budget-warn {
   color: var(--neg-text);
   font-weight: 600;

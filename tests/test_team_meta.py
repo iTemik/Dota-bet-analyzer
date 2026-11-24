@@ -1,5 +1,6 @@
 """Tests for the team meta state (backend.team_meta), its task step and how /statistics passes its settings."""
 
+import time
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -25,6 +26,7 @@ from backend.team_meta import (
     latest_patch,
     load_team_games,
     needs_player_heroes,
+    patch_is_fresh,
     player_heroes_days,
 )
 
@@ -112,6 +114,8 @@ def test_actively_plays_meta_from_the_newest_15_recent_games():
     assert meta["pro_meta_picks_pct"] == 90.9  # 500 of 550 pro picks
     assert meta["meta_heroes_total"] == 5
     assert meta["patch"] == "7.39"
+    assert meta["patch_start"] is None
+    assert meta["patch_fresh"] is False
     assert meta["params"]["sample_games"] == 15
 
 
@@ -291,6 +295,7 @@ def test_load_team_games_cuts_windows_at_patch_and_skips_unknown_heroes():
     # Match 4 is older than the patch and is not looked up; match 3 misses a hero
     assert list(get_lineups.call_args.args[0]) == [1, 2, 3]
     assert games["patch"] == "7.40"
+    assert games["patch_start"] == patch_start
     assert (games["recent_start"], games["deep_start"]) == (patch_start, patch_start)
     assert [g["match_id"] for g in games["games"]] == [1, 2]
     assert games["games"][0]["picks"] == [[a, h] for a, h in zip(CORE, THREE_META, strict=True)]
@@ -499,4 +504,27 @@ def test_hero_meta_route_adds_the_latest_patch(monkeypatch):
     monkeypatch.setattr("backend.routes.catalog.latest_patch", lambda now: {"name": "7.41", "start_time": 1})
     client = create_app(test_config={}).test_client()
 
-    assert client.get("/api/heroes/meta").get_json() == {"heroes": [], "patch": "7.41"}
+    assert client.get("/api/heroes/meta").get_json() == {
+        "heroes": [],
+        "patch": "7.41",
+        "patch_start": 1,
+        "patch_fresh": False,
+    }
+
+
+def test_patch_is_fresh_until_the_settle_days_pass():
+    assert patch_is_fresh(NOW - 13 * DAY, 14, now=NOW)
+    assert not patch_is_fresh(NOW - 14 * DAY, 14, now=NOW)
+    assert not patch_is_fresh(None, 14, now=NOW)
+    assert not patch_is_fresh(NOW - DAY, 0, now=NOW)
+
+
+def test_team_meta_tells_whether_the_patch_is_fresh():
+    team_games = {**_team_games(_games(15, THREE_META)), "patch_start": int(time.time()) - 3 * DAY}
+    args = (CORE, {a: {} for a in CORE}, HERO_STATS)
+
+    fresh = compute_team_meta(team_games, *args, MetaParams(), TeamMetaParams())
+    settled = compute_team_meta(team_games, *args, MetaParams(patch_settle_days=2), TeamMetaParams())
+
+    assert (fresh["patch_start"], fresh["patch_fresh"]) == (team_games["patch_start"], True)
+    assert settled["patch_fresh"] is False

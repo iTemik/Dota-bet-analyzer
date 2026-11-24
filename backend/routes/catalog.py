@@ -22,7 +22,7 @@ from backend.schemas import (
     TeamSearchQuerySchema,
     VersionSchema,
 )
-from backend.team_meta import latest_patch
+from backend.team_meta import latest_patch, patch_is_fresh
 
 logger = setup_logging(__name__)
 
@@ -93,9 +93,22 @@ def get_hero_meta(args: dict) -> tuple[Response, int]:
     """
     try:
         refresh = args.pop("refresh", False)
-        meta = get_meta(MetaParams(**args), refresh)
-        patch = latest_patch(int(time.time()))  # Cached for a week, None when unknown
-        return jsonify({**meta, "patch": patch["name"] if patch else None}), 200
+        params = MetaParams(**args)
+        meta = get_meta(params, refresh)
+        now = int(time.time())
+        patch = latest_patch(now)  # Cached for a week, None when unknown
+        patch_start = patch["start_time"] if patch else None
+        return (
+            jsonify(
+                {
+                    **meta,
+                    "patch": patch["name"] if patch else None,
+                    "patch_start": patch_start,
+                    "patch_fresh": patch_is_fresh(patch_start, params.patch_settle_days, now),
+                }
+            ),
+            200,
+        )
     except ConnectionError as e:
         return api_error(503, Errors.FAILED_TO_FETCH_HERO_STATS, e)
 

@@ -256,6 +256,11 @@ class MetaThresholdsSchema(Schema):
         validate=validate.Range(min=0, max=100),
         metadata={"description": "Pub meta: minimum win rate of those heroes, percent"},
     )
+    patch_settle_days = fields.Int(
+        load_default=MetaParams.patch_settle_days,
+        validate=validate.Range(min=0, max=365),
+        metadata={"description": "Days after the latest patch before the meta counts as settled"},
+    )
 
 
 class TeamMetaQuerySchema(MetaThresholdsSchema):
@@ -556,6 +561,8 @@ class TeamMetaSchema(Schema):
     )
     sample = fields.Nested(TeamMetaSampleSchema)
     patch = fields.Str(allow_none=True, metadata={"description": "Latest patch the windows are cut at"})
+    patch_start = fields.Int(allow_none=True, metadata={"description": "Latest patch release (unix seconds)"})
+    patch_fresh = fields.Bool(metadata={"description": "Fewer than `patch_settle_days` days since the latest patch"})
     recent = fields.Nested(TeamMetaWindowSchema)
     deep = fields.Nested(TeamMetaWindowSchema)
     pro_meta_picks_pct = fields.Float(
@@ -964,6 +971,10 @@ class MetaSchema(Schema):
 
     fetched_at = fields.Int(required=True, metadata={"description": "When the hero stats were fetched (unix seconds)"})
     patch = fields.Str(allow_none=True, metadata={"description": "Latest Dota patch, null when unknown"})
+    patch_start = fields.Int(allow_none=True, metadata={"description": "Latest patch release (unix seconds)"})
+    patch_fresh = fields.Bool(
+        required=True, metadata={"description": "Fewer than `patch_settle_days` days since the latest patch"}
+    )
     params = fields.Dict(required=True, metadata={"description": "Thresholds used"})
     pro_matches = fields.Int(required=True, metadata={"description": "Pro matches in the window (pro picks / 10)"})
     pub_matches = fields.Int(

@@ -77,7 +77,7 @@ const rows = () => bodyRows().map((r) => within(r).getAllByRole('cell').map((c) 
 const names = () => rows().map((r) => r[0])
 
 const DEFAULT_URL =
-  '/api/heroes/meta?pro_min_pick_ban=40&ultra_min_win=55&ultra_min_picks=5&pub_top=30&pub_min_win=52'
+  '/api/heroes/meta?pro_min_pick_ban=40&ultra_min_win=55&ultra_min_picks=5&pub_top=30&pub_min_win=52&patch_settle_days=14'
 
 const renderLoaded = async () => {
   const fetchMock = mockFetch(meta)
@@ -144,6 +144,27 @@ describe('MetaTab', () => {
 
     // The effect can run after the table is on screen, so wait for it
     await waitFor(() => expect(onPatch).toHaveBeenCalledWith('7.41'))
+  })
+
+  it('warns that the meta is not settled while the patch is fresh', async () => {
+    const start = Math.floor(Date.now() / 1000) - 5 * 86400 - 60
+    mockFetch({ ...meta, patch: '7.41', patch_start: start, patch_fresh: true })
+    render(<MetaTab />)
+    expect(await screen.findByRole('status')).toHaveTextContent(
+      '⚠ Patch 7.41 is 5 days old: the meta is not settled yet (it takes about 14 days), so these heroes can still change.',
+    )
+  })
+
+  it('has no patch warning once the meta is settled', async () => {
+    mockFetch({ ...meta, patch: '7.41', patch_start: 1, patch_fresh: false })
+    render(<MetaTab />)
+    await screen.findByRole('table', { name: 'Meta heroes' })
+    expect(screen.queryByRole('status')).toBeNull()
+  })
+
+  it('has a setting for the days the meta needs after a patch', async () => {
+    await renderLoaded()
+    expect(screen.getByLabelText('Meta settles: days after a patch')).toHaveValue(14)
   })
 
   it('highlights ultra meta heroes and explains each meta tag', async () => {
@@ -225,7 +246,7 @@ describe('MetaTab', () => {
     await user.type(pickBan, '20')
     await user.click(screen.getByRole('button', { name: 'Apply' }))
 
-    const url = '/api/heroes/meta?pro_min_pick_ban=20&ultra_min_win=55&ultra_min_picks=5&pub_top=30&pub_min_win=52'
+    const url = '/api/heroes/meta?pro_min_pick_ban=20&ultra_min_win=55&ultra_min_picks=5&pub_top=30&pub_min_win=52&patch_settle_days=14'
     expect(fetchMock).toHaveBeenLastCalledWith(url, undefined)
     expect(JSON.parse(localStorage.getItem(META_PARAMS_KEY) ?? '{}')).toMatchObject({
       pro_min_pick_ban: 20,
@@ -254,7 +275,7 @@ describe('MetaTab', () => {
     localStorage.setItem(META_PARAMS_KEY, JSON.stringify({ pub_top: 10, pub_bracket: 7 }))
     const fetchMock = await renderLoaded()
     expect(fetchMock).toHaveBeenCalledWith(
-      '/api/heroes/meta?pro_min_pick_ban=40&ultra_min_win=55&ultra_min_picks=5&pub_top=10&pub_min_win=52',
+      '/api/heroes/meta?pro_min_pick_ban=40&ultra_min_win=55&ultra_min_picks=5&pub_top=10&pub_min_win=52&patch_settle_days=14',
       undefined,
     )
     expect(screen.getByLabelText('Pub meta: most picked heroes')).toHaveValue(10)

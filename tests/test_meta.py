@@ -1,5 +1,6 @@
 """Tests for the hero meta (backend.meta) and GET /api/heroes/meta."""
 
+import time
 from unittest.mock import patch
 
 import pytest
@@ -159,6 +160,7 @@ def test_endpoint_returns_meta_and_caches(client, fake_redis):
         "ultra_min_picks": 5,
         "pub_top": 30,
         "pub_min_win": 52.0,
+        "patch_settle_days": 14,
     }
     assert [h["hero_id"] for h in data["heroes"]] == [4, 1, 3]
     assert data["pub_matches"] == 33
@@ -169,6 +171,28 @@ def test_endpoint_returns_meta_and_caches(client, fake_redis):
     assert [h["hero_id"] for h in again_data["heroes"] if "pub" in h["meta"]] == [1]
 
 
+@pytest.mark.parametrize(
+    ("days_ago", "query", "fresh"), [(5, "", True), (20, "", False), (20, "?patch_settle_days=30", True)]
+)
+def test_endpoint_tells_whether_the_patch_is_fresh(client, fake_redis, days_ago, query, fresh):
+    start = int(time.time()) - days_ago * 86400
+    with (
+        patch("backend.meta.get_json", return_value=HERO_STATS),
+        patch("backend.routes.catalog.latest_patch", return_value={"name": "7.40", "start_time": start}),
+    ):
+        data = client.get(f"/api/heroes/meta{query}").get_json()
+    assert (data["patch"], data["patch_start"], data["patch_fresh"]) == ("7.40", start, fresh)
+
+
+def test_endpoint_without_patch_is_not_fresh(client, fake_redis):
+    with (
+        patch("backend.meta.get_json", return_value=HERO_STATS),
+        patch("backend.routes.catalog.latest_patch", return_value=None),
+    ):
+        data = client.get("/api/heroes/meta").get_json()
+    assert (data["patch"], data["patch_start"], data["patch_fresh"]) == (None, None, False)
+
+
 def test_endpoint_rejects_invalid_params(client, fake_redis):
     for query in (
         "pro_min_pick_ban=101",
@@ -177,6 +201,7 @@ def test_endpoint_rejects_invalid_params(client, fake_redis):
         "ultra_min_picks=0",
         "ultra_min_win=abc",
         "pub_min_win=101",
+        "patch_settle_days=-1",
     ):
         assert client.get(f"/api/heroes/meta?{query}").status_code == 422, query
 

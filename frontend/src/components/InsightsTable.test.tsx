@@ -119,6 +119,21 @@ describe('InsightsTable', () => {
       ...fields,
     })
 
+    it('warns under the state while the patch is fresh', () => {
+      const start = Math.floor(Date.now() / 1000) - 86400 - 60
+      render(
+        <InsightsTable
+          teams={[team({}), team({})]}
+          ranks={[new Map(), new Map()]}
+          metas={[meta({ patch: '7.41', patch_start: start, patch_fresh: true }), meta({ patch: '7.41', patch_fresh: false })]}
+        />,
+      )
+
+      const [first, second] = rowCells('Meta')
+      expect(within(first).getByText('⚠ Patch 7.41 is 1 day old: the meta is not settled yet')).toHaveClass('patch-warning')
+      expect(second.querySelector('.patch-warning')).toBeNull()
+    })
+
     it('shows the state with the sample’s 2+ and 3+ shares, coloured by the thresholds', () => {
       render(<InsightsTable teams={[team({}), team({})]} ranks={[new Map(), new Map()]} metas={[meta(), undefined]} />)
 
