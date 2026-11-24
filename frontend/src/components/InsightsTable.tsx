@@ -1,5 +1,6 @@
 import type { ReactNode } from 'react'
 import { formatDate, teamName } from '../format'
+import { patchWarning } from '../meta'
 import { getCorePlayers, getStandins, hasCore, renderName } from '../roster'
 import type {
   Player,
@@ -125,6 +126,7 @@ const renderMetaState = (meta: TeamMeta | null | undefined) => {
           <span className={shareClass(sample.meta3_games_pct, a3, p3)}>{formatPct(sample.meta3_games_pct)}</span>
         </>
       )}
+      {meta.patch_fresh && <div className="patch-warning">⚠ {patchWarning(meta.patch, meta.patch_start)}</div>}
     </div>
   )
 }

@@ -130,6 +130,8 @@ export interface TeamMeta {
   pool_state?: TeamPoolState | null // null without a full sample
   sample?: TeamMetaSample
   patch?: string | null // the windows start no earlier than this patch
+  patch_start?: number | null // latest patch release (unix seconds)
+  patch_fresh?: boolean // the meta is not settled yet after the latest patch
   recent?: TeamMetaWindow
   deep?: TeamMetaWindow
   pro_meta_picks_pct?: number | null
@@ -280,12 +282,15 @@ export interface MetaParams {
   ultra_min_picks: number
   pub_top: number
   pub_min_win: number
+  patch_settle_days: number // days after the latest patch before the meta counts as settled
 }
 
 // GET /api/heroes/meta
 export interface Meta {
   fetched_at: number
   patch?: string | null // latest Dota patch, shown in the tab name
+  patch_start?: number | null // latest patch release (unix seconds)
+  patch_fresh?: boolean // fewer than params.patch_settle_days days since the latest patch
   params: MetaParams
   pro_matches: number
   pub_matches: number

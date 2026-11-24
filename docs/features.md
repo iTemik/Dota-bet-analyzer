@@ -93,6 +93,9 @@ All endpoints are under `/api/`; request and response schemas are in Swagger UI 
   `backend/meta.py` `MetaParams`
 - Meta tab: one sortable table (Pro P+B, Pro Win, Pub Picks, Pub Win with bars, golden ★ Ultra rows); thresholds kept
   in the browser
+- Fresh patch warning: while fewer than `patch_settle_days` (default 14, a Meta tab setting) days have passed since the
+  latest patch (OpenDota `/constants/patch`, cached a week), the Meta tab and the Insights Meta row say the meta is not
+  settled yet (`patch_fresh`, `patch_start` in `/heroes/meta` and the team meta)
 
 ### Matches (`/matches`)
 - Upcoming (soonest first) and recently finished pro series: time, tournament (name, Liquipedia link, icon), Bo, teams,

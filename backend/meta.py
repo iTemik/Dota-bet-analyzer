@@ -41,6 +41,7 @@ class MetaParams:
     ultra_min_picks: int = 5  # so a hero with 2 wins in 2 picks is not ultra meta
     pub_top: int = 30  # most picked heroes
     pub_min_win: float = 52.0  # percent
+    patch_settle_days: int = 14  # The meta counts as not settled until this many days after the latest patch
 
 
 def _hero_stat(entry: dict[str, Any]) -> dict[str, Any]:

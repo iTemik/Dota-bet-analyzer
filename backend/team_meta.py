@@ -129,6 +129,21 @@ def latest_patch(now: int) -> Optional[dict[str, Any]]:
     return max(released, key=lambda p: p["start_time"], default=None)
 
 
+def patch_is_fresh(patch_start: Optional[int], settle_days: int, now: Optional[int] = None) -> bool:
+    """True while fewer than `settle_days` days have passed since the latest patch (the meta is not settled yet).
+
+    Args:
+        patch_start: Latest patch release (unix seconds), None when unknown
+        settle_days: Days the meta needs to settle after a patch
+        now: Current unix time (for tests)
+
+    Returns:
+        False when the patch is unknown
+    """
+    now = now if now is not None else int(time.time())
+    return patch_start is not None and now - patch_start < settle_days * DAY_SECONDS
+
+
 def _team_picks(lineup: list[Any], radiant: bool) -> Optional[list[list[int]]]:
     """[[account_id, hero_id], ...] of the team's side, None unless all TEAM_SIZE heroes are known."""
     side = [p for p in sorted(lineup) if is_radiant(p.player_slot) == radiant and p.hero_id]
@@ -147,7 +162,7 @@ def load_team_games(team_id: int, days: int, params: TeamMetaParams, now: Option
         now: Current unix time (for tests)
 
     Returns:
-        {"recent_start", "deep_start": unix seconds, "patch": name or None,
+        {"recent_start", "deep_start": unix seconds, "patch": name or None, "patch_start": unix seconds or None,
          "games": [{"match_id", "start_time", "picks": [[account_id, hero_id], ...]}, ...] newest first};
         games without all five picked heroes are skipped
     """
@@ -169,6 +184,7 @@ def load_team_games(team_id: int, days: int, params: TeamMetaParams, now: Option
         "recent_start": recent_start,
         "deep_start": deep_start,
         "patch": patch["name"] if patch else None,
+        "patch_start": patch["start_time"] if patch else None,
         "games": games,
     }
 
@@ -394,7 +410,8 @@ def compute_team_meta(
 
     Returns:
         state, pool_state (narrow/normal/wide or None), sample (the games the states come from: window, start of its
-        oldest game and the _window numbers), patch, recent/deep windows (games, heroes, start),
+        oldest game and the _window numbers), patch, patch_start, patch_fresh (meta not settled yet),
+        recent/deep windows (games, heroes, start),
         pro_meta_picks_pct (share of all pro picks on meta heroes), meta_heroes_total (size of the meta list),
         heroes (meta heroes the team picked `meta_hero_min_games`+ times: hero_id, localized_name, icon, ultra, games,
         recent_games, practice_players; most games first), players (account_id, meta_heroes practised, pub_known)
@@ -433,6 +450,8 @@ def compute_team_meta(
         "pool_state": _pool_state(sample, params),
         "sample": sample,
         "patch": team_games.get("patch"),
+        "patch_start": team_games.get("patch_start"),
+        "patch_fresh": patch_is_fresh(team_games.get("patch_start"), meta_params.patch_settle_days),
         "recent": recent,
         "deep": deep,
         "pro_meta_picks_pct": _percent(pro_meta_picks, all_pro_picks),

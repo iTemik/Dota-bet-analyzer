@@ -2,7 +2,7 @@ import { Fragment, useEffect, useState, type FormEvent, type ReactNode } from 'r
 import Bar from './Bar'
 import { formatDateTime, formatPercent, formatShortCount } from '../format'
 import { requestJson } from '../api'
-import { DEFAULT_META_PARAMS, META_PARAMS_KEY, loadMetaParams } from '../meta'
+import { DEFAULT_META_PARAMS, META_PARAMS_KEY, loadMetaParams, patchWarning } from '../meta'
 import type { Meta, MetaHero, MetaKind, MetaParams } from '../types'
 
 const metaUrl = (params: MetaParams): string =>
@@ -239,6 +239,7 @@ const FIELDS: { key: keyof MetaParams; label: string; min: number; max?: number;
   { key: 'ultra_min_picks', label: 'Ultra meta: at least picks', min: 1 },
   { key: 'pub_top', label: 'Pub meta: most picked heroes', min: 1, max: 200 },
   { key: 'pub_min_win', label: 'Pub meta: Win % above', min: 0, max: 100, step: 0.1 },
+  { key: 'patch_settle_days', label: 'Meta settles: days after a patch', min: 0, max: 365 },
 ]
 
 interface MetaTabProps {
@@ -300,6 +301,12 @@ function MetaTab({ onPatch }: MetaTabProps) {
       {!data && !error && <p>Loading meta...</p>}
       {data && (
         <>
+          {data.patch_fresh && (
+            <p className="patch-warning" role="status">
+              ⚠ {patchWarning(data.patch, data.patch_start)} (it takes about {data.params.patch_settle_days} days), so
+              these heroes can still change.
+            </p>
+          )}
           <p className="prediction-hint meta-updated">
             OpenDota hero stats for about the last 7 days: {count(data.heroes.length)} meta heroes,{' '}
             {count(data.pro_matches)} pro matches,{' '}

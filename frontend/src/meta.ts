@@ -8,6 +8,7 @@ export const DEFAULT_META_PARAMS: MetaParams = {
   ultra_min_picks: 5,
   pub_top: 30,
   pub_min_win: 52,
+  patch_settle_days: 14,
 }
 // The thresholds are kept in the browser, so they survive a reload
 export const META_PARAMS_KEY = 'metaParams'
@@ -21,4 +22,17 @@ export const loadMetaParams = (): MetaParams => {
   } catch {
     return DEFAULT_META_PARAMS
   }
+}
+
+const DAY_SECONDS = 86400
+
+// "Patch 7.40 is 5 days old: the meta is not settled yet" (shown while the backend says patch_fresh)
+export const patchWarning = (
+  patch: string | null | undefined,
+  patchStart: number | null | undefined,
+  now: number = Date.now() / 1000,
+): string => {
+  const days = patchStart ? Math.max(0, Math.floor((now - patchStart) / DAY_SECONDS)) : null
+  const age = days === null ? 'is new' : days === 0 ? 'came out today' : `is ${days} day${days === 1 ? '' : 's'} old`
+  return `${patch ? `Patch ${patch}` : 'The latest patch'} ${age}: the meta is not settled yet`
 }
